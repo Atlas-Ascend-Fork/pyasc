@@ -68,8 +68,8 @@
     make markdown   # 生成markdown格式文档
     make html       # 生成html格式文档
     # Windows 环境（无 Make 工具时）
-    sphinx-build -b markdown . /_build/markdown     # 生成markdown格式文档
-    sphinx-build -b html . /_build/html             # 生成html格式文档
+    sphinx-build -b markdown . _build/markdown     # 生成markdown格式文档
+    sphinx-build -b html . _build/html             # 生成html格式文档
     ```
 
 4.  **查看生成的文档**：文档生成成功后，会保存在 `docs/_build/markdown` 或 `docs/_build/html` 目录下，直接打开 `index.md` 或 `index.html` 文件，即可查看完整的 API 文档。
@@ -166,8 +166,8 @@
     make html       # 更新html格式文档
     # Windows 环境
     cd docs 
-    sphinx-build -b markdown . /_build/markdown     # 更新markdown格式文档
-    sphinx-build -b html . /_build/html             # 更新html格式文档
+    sphinx-build -b markdown . _build/markdown     # 更新markdown格式文档
+    sphinx-build -b html . _build/html             # 更新html格式文档
     ```
 
 3.  **验证文档更新结果**：重新打开 `docs/_build/markdown/index.md` 或 `docs/_build/html/index.html`，导航到该修改的模块 / 函数，确认文档内容已同步更新。
