@@ -733,7 +733,8 @@ def wait_get_tensor_c_docstring():
     .. code-block:: python
 
         # 异步模式样例
-        mm.iterate(sync=False)
+        with mm.iterate(sync=False):
+            pass
         # 其他操作
         for i in range(single_corem // base_m * single_core_n // base_n):
             mm.get_tensor_c(tensor=ub_cmatrix, sync=False)
@@ -867,10 +868,11 @@ def get_tensor_c_docstring():
       .. code-block:: python
 
           # 同步模式样例
-          while mm.iterate() as count:
-          mm.get_tensor_c(tensor=ub_cmatrix)
+          with mm.iterate() as count:
+              mm.get_tensor_c(tensor=ub_cmatrix)
           # 异步模式样例
-          mm.iterate(sync=False)
+          with mm.iterate(sync=False):
+              pass
           # 其他操作
           for i in range(single_m // base_m * single_n // base_n):
               mm.get_tensor_c(tensor=ub_cmatrix, sync=False)
@@ -879,14 +881,14 @@ def get_tensor_c_docstring():
 
       .. code-block:: python
 
-          while mm.iterate() as count:
+          with mm.iterate() as count:
               mm.get_tensor_c(tensor=gm)
     
     - 获取C矩阵，同时输出至GM和VECIN，同步模式样例
 
       .. code-block:: python
 
-          while mm.iterate() as count:
+          with mm.iterate() as count:
               mm.get_tensor_c(tensor=gm, optional_tensor=ub_cmatrix)
     
     - 获取API接口返回的GM上的C矩阵，手动拷贝至UB，异步模式样例
@@ -897,12 +899,13 @@ def get_tensor_c_docstring():
           mm.set_tensor_a(gm_a)
           mm.set_tensor_b(gm_b)
           mm.set_tail(single_m, single_n, single_k)
-          mm.iterate(sync=False)
+          with mm.iterate(sync=False):
+              pass
           for i in range(single_m // base_m * single_n // base_n):
-              global = mm.get_tensor_c(sync=False)
+              gm_c_block = mm.get_tensor_c(sync=False)
               for j in range(4):
                   local = que.alloc_tensor(dtype=asc.half)
-                  asc.data_copy(local, global[64* 128 * i:], count=64 * 128)
+                  asc.data_copy(local, gm_c_block[64* 128 * i:], count=64 * 128)
                 
     """
 
@@ -912,6 +915,8 @@ def get_tensor_c_docstring():
 def iterate_docstring():
     func_introduction = """
     每调用一次Iterate，会计算出一块baseM * baseN的C矩阵。
+
+    Python接口返回MatmulIterator上下文管理器，使用with mm.iterate() as count进入生成迭代计算；直接调用不会生成Iterate操作。
     """
 
     cpp_signature = """
@@ -950,10 +955,11 @@ def iterate_docstring():
     .. code-block:: python
 
         # 同步模式样例
-        while mm.iterate() as count:
-            mm.get_tensor_c(tensor=ub_cmatrix)
+        with mm.iterate() as count:
+                mm.get_tensor_c(tensor=ub_cmatrix)
         # 异步模式样例
-        mm.iterate(sync=False)
+        with mm.iterate(sync=False):
+            pass
         # 其他操作
         for i in range(single_m // base_m * single_n // base_n):
             mm.get_tensor_c(tensor=ub_cmatrix, sync=False)

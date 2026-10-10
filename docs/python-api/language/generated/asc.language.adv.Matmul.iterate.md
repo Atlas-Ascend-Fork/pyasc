@@ -4,6 +4,8 @@
 
 每调用一次Iterate，会计算出一块baseM \* baseN的C矩阵。
 
+Python接口返回MatmulIterator上下文管理器，使用with mm.iterate() as count进入生成迭代计算；直接调用不会生成Iterate操作。
+
 **对应的Ascend C函数原型**
 
 ```c++
@@ -31,10 +33,11 @@ __aicore__ inline bool Iterate(bool enPartialSum, const LocalTensor<T>& localCma
 
 ```python
 # 同步模式样例
-while mm.iterate() as count:
-    mm.get_tensor_c(tensor=ub_cmatrix)
+with mm.iterate() as count:
+        mm.get_tensor_c(tensor=ub_cmatrix)
 # 异步模式样例
-mm.iterate(sync=False)
+with mm.iterate(sync=False):
+    pass
 # 其他操作
 for i in range(single_m // base_m * single_n // base_n):
     mm.get_tensor_c(tensor=ub_cmatrix, sync=False)

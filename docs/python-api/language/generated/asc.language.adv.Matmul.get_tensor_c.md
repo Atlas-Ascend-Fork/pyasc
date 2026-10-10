@@ -48,22 +48,23 @@ __aicore__ inline GlobalTensor<DstT> GetTensorC(uint8_t enAtomic = 0, bool enSeq
 - 获取C矩阵，输出至VECIN
   ```python
   # 同步模式样例
-  while mm.iterate() as count:
-  mm.get_tensor_c(tensor=ub_cmatrix)
+  with mm.iterate() as count:
+      mm.get_tensor_c(tensor=ub_cmatrix)
   # 异步模式样例
-  mm.iterate(sync=False)
+  with mm.iterate(sync=False):
+      pass
   # 其他操作
   for i in range(single_m // base_m * single_n // base_n):
       mm.get_tensor_c(tensor=ub_cmatrix, sync=False)
   ```
 - 获取C矩阵，输出至GM，同步模式样例
   ```python
-  while mm.iterate() as count:
+  with mm.iterate() as count:
       mm.get_tensor_c(tensor=gm)
   ```
 - 获取C矩阵，同时输出至GM和VECIN，同步模式样例
   ```python
-  while mm.iterate() as count:
+  with mm.iterate() as count:
       mm.get_tensor_c(tensor=gm, optional_tensor=ub_cmatrix)
   ```
 - 获取API接口返回的GM上的C矩阵，手动拷贝至UB，异步模式样例
@@ -72,10 +73,11 @@ __aicore__ inline GlobalTensor<DstT> GetTensorC(uint8_t enAtomic = 0, bool enSeq
   mm.set_tensor_a(gm_a)
   mm.set_tensor_b(gm_b)
   mm.set_tail(single_m, single_n, single_k)
-  mm.iterate(sync=False)
+  with mm.iterate(sync=False):
+      pass
   for i in range(single_m // base_m * single_n // base_n):
-      global = mm.get_tensor_c(sync=False)
+      gm_c_block = mm.get_tensor_c(sync=False)
       for j in range(4):
           local = que.alloc_tensor(dtype=asc.half)
-          asc.data_copy(local, global[64* 128 * i:], count=64 * 128)
+          asc.data_copy(local, gm_c_block[64* 128 * i:], count=64 * 128)
   ```
