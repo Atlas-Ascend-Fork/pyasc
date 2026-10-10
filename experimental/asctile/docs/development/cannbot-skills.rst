@@ -64,13 +64,44 @@ Recommended Skills
     * - ``npu-arch``
       - NPU architecture knowledge: DAV_2201 vs DAV_3510, buffer sizes (UB/L0C/BT),
         Cube/Vector/MTE units, SIMD vs SIMD-RegBase, NDDMA, CCU
+    * - ``ascendc-regbase-best-practice``
+      - DAV_3510 RegBase (SIMD-RegBase) development: API constraints, implementation
+        structure, common pitfalls, and real reference operators for the
+        ``RegTensor`` / ``MaskReg`` / ``asc_vf_call`` / ``__simd_vf__`` paradigm
+    * - ``ascendc-sync-audit``
+      - Ascend C signal synchronization verification and fix: detects missing/mismatched
+        sync between pipelines (MTE2/MTE3/Vector/Cube) and across cores
+        (CrossCoreSetFlag/SyncAll), flag reuse conflicts, and buffer-index
+        inconsistencies that cause hangs, deadlocks, or half-finished data; ships
+        static analyzers (``sync_audit.py``, ``ascendc_flow_analyzer.py``) plus a
+        333-PR case retriever for fix patterns
+    * - ``ops-profiling``
+      - On-board performance collection and analysis via ``msprof``: standard /
+        compare / quick / batch modes (``msprof_profile_run.sh``), bottleneck
+        diagnosis (CUBE/VECTOR/MTE2/MTE1/FIXPIPE/SCALAR); MC2/multi-rank (fork)
+        operators must use ``msprof`` (not ``msprof op``)
+    * - ``ops-simulator``
+      - CANN Simulator (``npusim``, formerly ``cannsim``) for functional and
+        performance simulation without NPU hardware: Ascend 950 only, single-card,
+        AI Core compute only (no MC2/HCCL); ``summary.json`` quick diagnosis and
+        trace bubble analysis with PC-to-source mapping
+    * - ``aiss-tiling-solver``
+      - ``TilingSolver`` CLI for automatic optimal tiling of MatMul / Vector
+        operators (Z3-based): ``platform_info`` collects hardware params
+        (L0A/L0B/L0C/L1/UB/L2/HBM sizes, bandwidths, CUBE_OPS_PER_CYCLE) and the
+        solver returns base/single-core tile sizes and double-buffer flags
+    * - ``ops-precision-standard``
+      - Operator precision standards (mixed tolerance atol/rtol) per dtype and
+        operator category: random / non-compute / integer / quantization / float;
+        used for ST verification and FP16/BF16/FP32 acceptance criteria
 
 
 Directory Structure
 -------------------
 
 The ``cannbot-skills`` repository should be cloned as a **sibling directory** to ``pyasc`` (not inside the project).
-Skills are symlinked into ``.opencode/skills/``, and ``asc-devkit`` is symlinked in the project root.
+Skills are symlinked into ``.opencode/skills/``, the ``ops-code-reviewer`` agents into ``.opencode/agents/``,
+and ``asc-devkit`` is symlinked in the project root.
 All paths use the ``$CANNBOT_SKILLS`` environment variable.
 
 
@@ -99,11 +130,23 @@ Installation
         ascendc-runtime-debug
         ascendc-tiling-design
         npu-arch
+        ascendc-regbase-best-practice
+        ascendc-sync-audit
+        ops-profiling
+        ops-simulator
+        aiss-tiling-solver
+        ops-precision-standard
     )
     for skill in "${skills[@]}"; do
         ln -sfn $CANNBOT_SKILLS/ops/$skill .opencode/skills/$skill
     done
     ln -sfn $CANNBOT_SKILLS/plugins-official/ops-direct-invoke/asc-devkit ./asc-devkit
+
+    # ops-code-reviewer plugin: agent symlinks only (do not overwrite AGENTS.md)
+    mkdir -p .opencode/agents
+    for agent in ascendc-code-summarizer ascendc-ops-reviewer; do
+        ln -sfn $CANNBOT_SKILLS/plugins-official/ops-code-reviewer/agents/$agent.md .opencode/agents/$agent.md
+    done
 
     # Verify skills installation
     for s in .opencode/skills/*/; do
@@ -115,8 +158,9 @@ Restart OpenCode to load the skills.
 Hiding Symlinks from Git
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-The symlinks created above (``asc-devkit`` and skills under ``.opencode/skills/``) are external
-dependencies and should not be tracked by git. It is recommended to add them to the local ``.git/info/exclude`` file:
+The symlinks created above (``asc-devkit``, skills under ``.opencode/skills/``, and agents under
+``.opencode/agents/``) are external dependencies and should not be tracked by git. It is recommended
+to add them to the local ``.git/info/exclude`` file:
 
 .. code-block:: bash
 
@@ -124,7 +168,10 @@ dependencies and should not be tracked by git. It is recommended to add them to 
     # CANNBot skills symlinks
     asc-devkit
     .opencode/skills/ascendc-*
-    .opencode/skills/npu-arch" >> .git/info/exclude
+    .opencode/skills/npu-arch
+    .opencode/skills/ops-*
+    .opencode/skills/aiss-*
+    .opencode/agents/ascendc-*" >> .git/info/exclude
 
 
 Updating

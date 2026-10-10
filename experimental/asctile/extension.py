@@ -24,4 +24,7 @@ def get_package_dirs(prefix: str) -> Mapping[str, str]:
 
 
 def get_devtools(cmake_dir: str) -> Mapping[str, str]:
-    return {"asctile-opt": f"{cmake_dir}/bin/asctile-opt"}
+    return {
+        "asctile-lsp": f"{cmake_dir}/bin/asctile-lsp",
+        "asctile-opt": f"{cmake_dir}/bin/asctile-opt",
+    }

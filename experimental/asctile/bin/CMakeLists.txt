@@ -10,15 +10,46 @@ get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
 get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 get_property(extension_libs GLOBAL PROPERTY MLIR_EXTENSION_LIBS)
 
+# asctile-lsp
+
+set(TARGET_NAME asctile-lsp)
+
+add_mlir_tool(${TARGET_NAME} asctile-lsp.cpp PARTIAL_SOURCES_INTENDED)
+
+llvm_update_compile_flags(${TARGET_NAME})
+
+target_link_libraries(${TARGET_NAME} PRIVATE
+  ${dialect_libs}
+  ${conversion_libs}
+  ${extension_libs}
+
+  AscTileDialect
+  AscVFDialect
+
+  MLIRIR
+  MLIRLspServerLib
+  MLIRAsc
+  MLIREmitAsc
+)
+
+mlir_check_all_link_libraries(${TARGET_NAME})
+
+set_target_properties(${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+# asctile-opt
+
+set(TARGET_NAME asctile-opt)
+
 set(LLVM_LINK_COMPONENTS
   Core
   Support
   AsmParser
 )
 
-add_mlir_tool(asctile-opt asctile-opt.cpp PARTIAL_SOURCES_INTENDED SUPPORT_PLUGINS)
+add_mlir_tool(${TARGET_NAME} asctile-opt.cpp PARTIAL_SOURCES_INTENDED SUPPORT_PLUGINS)
 
-target_link_libraries(asctile-opt PRIVATE ${dialect_libs}
+target_link_libraries(${TARGET_NAME} PRIVATE
+  ${dialect_libs}
   ${conversion_libs}
   ${extension_libs}
 
@@ -44,8 +75,8 @@ target_link_libraries(asctile-opt PRIVATE ${dialect_libs}
   AscVFTransforms
 )
 
-llvm_update_compile_flags(asctile-opt)
+llvm_update_compile_flags(${TARGET_NAME})
 
-mlir_check_all_link_libraries(asctile-opt)
+mlir_check_all_link_libraries(${TARGET_NAME})
 
-set_target_properties(asctile-opt PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set_target_properties(${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
