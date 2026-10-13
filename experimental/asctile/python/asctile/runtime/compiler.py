@@ -18,6 +18,12 @@ from asc.runtime.compiler import CompileOptions as CompileOptionsBase, Compiler 
 class CompileOptions(CompileOptionsBase):
     """Binary compilation and IR transformation options (for ``asctile`` kernels)"""
 
+    cv_ratio: Literal[1, 2] = 1
+    """
+    The ratio between Vector and Cube units. For example, ``Ascend950PR_9599`` cores have two vector sub-cores per each
+    cube sub-core, hence the supported ratio values are 1 and 2.
+    """
+
     debug = False
     """
     Enable debug mode for the kernel.
@@ -69,12 +75,17 @@ class Compiler(CompilerBase):
 
     def __init__(self, options: Optional[CompileOptions] = None):
         super().__init__(options)
+        if self.options.cv_ratio not in (1, 2):
+            raise RuntimeError(f"'cv_ratio' is only allowed to be 1, 2 for the {self.arch} architecture")
+        if self.options.reuse_alloc not in (0, 1, 2):
+            raise RuntimeError("'reuse_alloc' is only allowed to be 0, 1, 2")
         if self.options.vf_fusion and self.arch != CompilationArch.C310:
-            raise RuntimeError(f"The vf fusion option is not supported for the {self.arch} architecture")
+            raise RuntimeError(f"VF fusion is not supported for the {self.arch} architecture")
 
     def preprocess_module(self, mod: ir.ModuleOp) -> None:
         super().preprocess_module(mod)
         builder = ir.Builder(mod.op)
+        mod.set_attr(asctile.ir.attr.cv_ratio, builder.get_i64_attr(self.options.cv_ratio))
         if self.options.static_alloc is not None:
             mod.set_attr(asctile.ir.attr.static_alloc, builder.get_bool_attr(self.options.static_alloc))
 
@@ -96,6 +107,11 @@ class Compiler(CompilerBase):
         asctile.passes.asctile.add_fulfill_data_transfer(pm)
         asctile.passes.asctile.add_verify_tensor_location(pm)
         asctile.passes.asctile.add_split_cube_load(pm)
+        asctile.passes.asctile.add_prepare_cv_strategy(pm)
+        asctile.passes.asctile.add_apply_cv_strategy(pm)
+        passes.common.add_canonicalizer(pm)
+        passes.common.add_cse(pm)
+        asctile.passes.asctile.add_combine_extract_slice(pm)
         asctile.passes.asctile.add_cube_transpose_to_load(pm)
         asctile.passes.asctile.add_legalize_matmul(pm)
         passes.common.add_canonicalizer(pm)
@@ -148,6 +164,7 @@ class Compiler(CompilerBase):
             asctile.passes.ascendc.add_reuse_tensor_allocation(pm)
         passes.common.add_canonicalizer(pm)
         if self.options.vf_fusion:
+            asctile.passes.ascvf.add_promote_cast_ops(pm)
             asctile.passes.ascvf.add_find_vf_group(pm)
             asctile.passes.ascvf.add_lower_to_reg(pm)
             passes.common.add_canonicalizer(pm)
@@ -166,6 +183,7 @@ class Compiler(CompilerBase):
         passes.common.add_canonicalizer(pm)
         asctile.passes.ascendc.add_promote_cv_block(pm)
         asctile.passes.ascendc.add_insert_cross_core_sync(pm)
+        asctile.passes.ascendc.add_insert_cross_core_sync_gm(pm)
         if self.options.insert_sync:
             passes.ascendc.add_erase_sync(pm)
             passes.ascendc.add_hoist_que_bind(pm)
@@ -181,12 +199,15 @@ class Compiler(CompilerBase):
         asctile.passes.ascvf.add_inline_vf_group(pm)
         passes.ascendc.add_declare_py_struct(pm)
         passes.ascendc.add_generate_boilerplate(pm)
-        asctile.passes.ascendc.add_insert_subblock_guard(pm)
+        if self.options.cv_ratio == 1:
+            asctile.passes.ascendc.add_insert_subblock_guard(pm)
         if self.options.matmul_cube_only:
             passes.ascendc.add_define_cube_only(pm)
         passes.ascendc.add_legalize_kernel_args(pm, set_ffts_addr=not arch_c310)
         passes.ascendc.add_detect_kernel_type(pm)
         asctile.passes.ascendc.add_insert_init_dump(pm)
+        passes.common.add_canonicalizer(pm)
+        passes.common.add_cse(pm)
         if self.options.verify_sync:
             passes.ascendc.add_verify_sync(pm)
         if self.options.strip_loc:

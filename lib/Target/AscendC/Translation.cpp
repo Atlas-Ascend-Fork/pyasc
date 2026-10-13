@@ -75,7 +75,8 @@ using PrintableOpTypes = std::tuple<
     // Common register API operations
     ascendc::CreateMaskOp, ascendc::ReduceMaxRegOp, ascendc::ReduceMinRegOp, ascendc::ReduceSumRegOp,
     ascendc::DuplicateRegOp, ascendc::DataCopyStoreOp, ascendc::DataCopyLoadOp, ascendc::UpdateMaskOp,
-    ascendc::RegTensorOp, ascendc::LocalMemBarOp, ascendc::DuplicateScalarRegOp, ascendc::SelectRegOp,
+    ascendc::MaskGenWithRegTensorOp, ascendc::RegTensorOp, ascendc::LocalMemBarOp, ascendc::CompareScalarRegOp,
+    ascendc::DuplicateScalarRegOp, ascendc::SelectRegOp,
     // Binary register API operations
     ascendc::AddRegOp, ascendc::AndRegOp, ascendc::DivRegOp, ascendc::FusedAbsSubRegOp, ascendc::FusedExpSubRegOp,
     ascendc::FusedMulDstAddRegOp, ascendc::SubRegOp, ascendc::MaxRegOp, ascendc::MinRegOp, ascendc::MulRegOp,

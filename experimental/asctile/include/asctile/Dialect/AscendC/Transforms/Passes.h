@@ -29,6 +29,7 @@ std::unique_ptr<Pass> createFuseBufIdSyncPass();
 std::unique_ptr<Pass> createInsertBiasBufIdSyncPass();
 std::unique_ptr<Pass> createInsertBufIdSyncPass();
 std::unique_ptr<Pass> createInsertCrossCoreSyncPass();
+std::unique_ptr<Pass> createInsertCrossCoreSyncGMPass();
 std::unique_ptr<Pass> createInsertInitDumpPass();
 std::unique_ptr<Pass> createInsertSubBlockGuardPass();
 std::unique_ptr<Pass> createLowerToL0Pass();

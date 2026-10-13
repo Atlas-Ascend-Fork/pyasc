@@ -51,6 +51,18 @@ LogicalResult mlir::ascendc::printOperation(CodeEmitter& emitter, ascendc::Updat
     return success();
 }
 
+LogicalResult mlir::ascendc::printOperation(CodeEmitter& emitter, ascendc::MaskGenWithRegTensorOp op)
+{
+    auto regType = ascendc::RegTensorType::get(op.getContext(), op.getType());
+    auto& os = emitter.ostream();
+    os << ascNamespace << "::" << op.getAPIName() << "<";
+    FAIL_OR(emitter.emitType(op.getLoc(), op.getType()));
+    os << ", 0>(" << emitter.getOrCreateName(op.getDst()) << ", reinterpret_cast<";
+    FAIL_OR(emitter.emitType(op.getLoc(), regType));
+    os << "&>(" << emitter.getOrCreateName(op.getSrcReg()) << "))";
+    return success();
+}
+
 LogicalResult mlir::ascendc::printOperation(CodeEmitter& emitter, ascendc::RegTensorOp op)
 {
     FAIL_OR(emitter.emitVariableDeclaration(op->getResult(0), false));
@@ -71,6 +83,17 @@ LogicalResult mlir::ascendc::printOperation(CodeEmitter& emitter, ascendc::Local
     os << ascNamespace << "::" << op.getAPIName() << "<" << ascNamespace
        << "::Reg::MemType::" << ascendc::stringifyEnum(op.getSrc()) << ", " << ascNamespace
        << "::Reg::MemType::" << ascendc::stringifyEnum(op.getDst()) << ">()";
+    return success();
+}
+
+LogicalResult mlir::ascendc::printOperation(CodeEmitter& emitter, ascendc::CompareScalarRegOp op)
+{
+    auto& os = emitter.ostream();
+    os << ascNamespace << "::" << op.getAPIName() << "<";
+    FAIL_OR(emitter.emitType(op.getLoc(), op.getScalar().getType()));
+    os << ", " << ascNamespace << "::CMPMODE::" << ascendc::stringifyEnum(op.getCmpMode()) << ">("
+       << emitter.getOrCreateName(op.getDstReg()) << ", " << emitter.getOrCreateName(op.getSrcReg()) << ", "
+       << emitter.getOrCreateName(op.getScalar()) << ", " << emitter.getOrCreateName(op.getMaskReg()) << ")";
     return success();
 }
 

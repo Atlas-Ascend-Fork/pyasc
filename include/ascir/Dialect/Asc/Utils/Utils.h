@@ -67,8 +67,6 @@ std::optional<int64_t> getVecLen(Operation* op);
 
 bool isTargetArchC310(Operation* op);
 
-SmallVector<Operation*> collectAllUsers(ascendc::LocalTensorAutoOp tensorOp);
-
 ascendc::LocalTensorAutoOp getAllocationRoot(Value v);
 
 Pipe getOpPipe(Operation* op, Pipe defaultPipe = Pipe::PIPE_S);

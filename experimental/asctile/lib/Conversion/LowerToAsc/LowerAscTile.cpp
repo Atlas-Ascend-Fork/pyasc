@@ -74,6 +74,10 @@ struct ConvertTensor : public ConvertOp<asctile::TensorOp> {
         auto loc = op.getLoc();
         Value tensor = rewriter.create<ascendc::GlobalTensorOp>(loc, typeConverter->convertType(op.getType()));
         rewriter.create<ascendc::GlobalTensorSetGlobalBufferOp>(loc, tensor, op.getBase(), /*size*/ Value{});
+        if (op.getDisableL2Cache())
+            rewriter.create<ascendc::GlobalTensorSetL2CacheHintOp>(
+                loc, tensor, rewriter.getAttr<ascendc::CacheModeAttr>(ascendc::CacheMode::CACHE_MODE_DISABLE),
+                rewriter.getAttr<ascendc::CacheRwModeAttr>(ascendc::CacheRwMode::RW));
         rewriter.replaceOp(op, tensor);
         return success();
     }
@@ -724,6 +728,19 @@ struct ConvertDumpTensor : ConvertOp<asctile::DumpTensorOp> {
     }
 };
 
+struct ConvertInline : ConvertOp<asctile::InlineOp> {
+    using ConvertOp::ConvertOp;
+
+    LogicalResult matchAndRewrite(asctile::InlineOp op, ConvertRewriter& rewriter) const override
+    {
+        SmallVector<Value> args;
+        if (rewriter.getRemappedValues(op.getArgs(), args).failed())
+            return op.emitOpError("has unsupported args");
+        rewriter.replaceOpWithNewOp<emitasc::VerbatimOp>(op, op.getValue(), args);
+        return success();
+    }
+};
+
 struct LowerAscTilePass : public asclower::impl::LowerAscTileBase<LowerAscTilePass> {
     void runOnOperation() override
     {
@@ -735,7 +752,7 @@ struct LowerAscTilePass : public asclower::impl::LowerAscTileBase<LowerAscTilePa
             //
             asctile::TensorOp, asctile::AccumulatorOp, asctile::SoftmaxOp, asctile::ReshapeOp, asctile::BroadcastOp,
             asctile::ReduceOp, asctile::InlineVFOp, asctile::CubeGroupOp, asctile::VectorGroupOp, asctile::PowerOp,
-            asctile::AssertOp, asctile::DumpTensorOp
+            asctile::AssertOp, asctile::DumpTensorOp, asctile::InlineOp
             //
             >();
         target.addLegalDialect<
@@ -747,7 +764,8 @@ struct LowerAscTilePass : public asclower::impl::LowerAscTileBase<LowerAscTilePa
             //
             ConvertTensor, ConvertAccumulator, ConvertReshape, ConvertBroadcast, ConvertSoftmax, ConvertRmsNorm,
             ConvertLayerNorm, ConvertReduce, ConvertInlineVF, ConvertCVGroup<asctile::CubeGroupOp, ascendc::IfAICOp>,
-            ConvertCVGroup<asctile::VectorGroupOp, ascendc::IfAIVOp>, ConvertPower, ConvertAssert, ConvertDumpTensor
+            ConvertCVGroup<asctile::VectorGroupOp, ascendc::IfAIVOp>, ConvertPower, ConvertAssert, ConvertDumpTensor,
+            ConvertInline
             //
             >(converter, context);
         if (applyPartialConversion(funcOp, target, std::move(patterns)).failed())

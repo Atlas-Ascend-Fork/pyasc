@@ -474,6 +474,11 @@ def TransposeType : APIType<"TransposeType"> {
   let apiName = "AscendC::TransposeType";
 }
 
+def UnalignReg : APIType<"UnalignReg"> {
+  let mnemonic = "unalign_reg";
+  let apiName = "AscendC::Reg::UnalignReg";
+}
+
 def UnaryRepeatParams : APIType<"UnaryRepeatParams"> {
   let mnemonic = "unary_repeat_params";
   let apiName = "AscendC::UnaryRepeatParams";

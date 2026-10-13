@@ -218,32 +218,6 @@ func.func @scf_for_init_dead_after_loop() {
     return
 }
 
-// CHECK-LABEL: func.func @scf_for_init_used_after_loop(%arg0: !ascendc.global_tensor<*xf32>) {
-// CHECK:         %0 = ascendc.local_tensor_auto veccalc() output : <64xf32>
-// CHECK-NEXT:    %1 = ascendc.local_tensor_auto veccalc() : <64xf32>
-// CHECK-NEXT:    ascendc.if_aiv {
-// CHECK-NEXT:      %c64_i64_0 = arith.constant 64 : i64
-// CHECK-NEXT:      ascendc.data_copy_l2 %1, %0, %c64_i64_0 {direction = #ascendc.copy_direction<veccalc, veccalc>} : !ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>, i64
-// CHECK-NEXT:    }
-// CHECK-NEXT:    %2 = scf.for %arg1 = %c0 to %c10 step %c1 iter_args(%arg2 = %1) -> (!ascendc.local_tensor<64xf32>) {
-// CHECK-NEXT:      scf.yield %arg2 : !ascendc.local_tensor<64xf32>
-// CHECK-NEXT:    }
-// CHECK-NEXT:    ascendc.data_copy_l2 %arg0, %0, %c64_i64 {direction = #ascendc.copy_direction<veccalc, gm>} : !ascendc.global_tensor<*xf32>, !ascendc.local_tensor<64xf32>, i64
-// CHECK-NEXT:    return
-// CHECK-NEXT:  }
-func.func @scf_for_init_used_after_loop(%arg0: !ascendc.global_tensor<*xf32>) {
-    %c0 = arith.constant 0 : index
-    %c10 = arith.constant 10 : index
-    %c1 = arith.constant 1 : index
-    %c64_i64 = arith.constant 64 : i64
-    %0 = ascendc.local_tensor_auto veccalc() : <64xf32>
-    %result = scf.for %i = %c0 to %c10 step %c1 iter_args(%tensor = %0) -> (!ascendc.local_tensor<64xf32>) {
-        scf.yield %tensor : !ascendc.local_tensor<64xf32>
-    }
-    ascendc.data_copy_l2 %arg0, %0, %c64_i64 {direction = #ascendc.copy_direction<veccalc, gm>} : !ascendc.global_tensor<*xf32>, !ascendc.local_tensor<64xf32>, i64
-    return
-}
-
 // CHECK-LABEL: func.func @scf_for_iter_arg_not_used_after_yielded_dst(%arg0: !ascendc.global_tensor<*xf32>) {
 // CHECK:         %0 = ascendc.local_tensor_auto veccalc() : <64xf32>
 // CHECK-NEXT:    %1 = scf.for %arg1 = %c0 to %c10 step %c1 iter_args(%arg2 = %0) -> (!ascendc.local_tensor<64xf32>) {
@@ -334,64 +308,6 @@ func.func @scf_for_yielded_from_if_aiv(%arg0: !ascendc.global_tensor<*xf32>) {
             ascendc.yield %1 : !ascendc.local_tensor<64xf32>
         }
         scf.yield %inner : !ascendc.local_tensor<64xf32>
-    }
-    return
-}
-
-// CHECK-LABEL: func.func @scf_for_init_arg_used_inside(%arg0: !ascendc.global_tensor<*xf32>) {
-// CHECK:         %0 = ascendc.local_tensor_auto veccalc() : <64xf32>
-// CHECK-NEXT:    %1 = ascendc.local_tensor_auto veccalc() : <64xf32>
-// CHECK-NEXT:    ascendc.if_aiv {
-// CHECK-NEXT:        %c64_i64_0 = arith.constant 64 : i64
-// CHECK-NEXT:        ascendc.data_copy_l2 %1, %0, %c64_i64_0 {direction = #ascendc.copy_direction<veccalc, veccalc>} : !ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>, i64
-// CHECK-NEXT:    }
-// CHECK-NEXT:    %2 = scf.for %arg1 = %c0 to %c10 step %c1 iter_args(%arg2 = %1) -> (!ascendc.local_tensor<64xf32>) {
-// CHECK-NEXT:      %3 = ascendc.local_tensor_auto veccalc() : <64xf32>
-// CHECK-NEXT:      ascendc.mul_l2 %3, %arg2, %0, %c64_i64 {direction = #ascendc.copy_direction<gm, veccalc>} : !ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>, i64
-// CHECK-NEXT:      scf.yield %3 : !ascendc.local_tensor<64xf32>
-// CHECK-NEXT:    }
-// CHECK-NEXT:    return
-// CHECK-NEXT:  }
-func.func @scf_for_init_arg_used_inside(%arg0: !ascendc.global_tensor<*xf32>) {
-    %c0 = arith.constant 0 : index
-    %c10 = arith.constant 10 : index
-    %c1 = arith.constant 1 : index
-    %c2 = arith.constant 2.0 : f32
-    %c64_i64 = arith.constant 64 : i64
-    %0 = ascendc.local_tensor_auto veccalc() : <64xf32>
-    %result = scf.for %i = %c0 to %c10 step %c1 iter_args(%tensor = %0) -> (!ascendc.local_tensor<64xf32>) {
-        %inner = ascendc.local_tensor_auto veccalc() : <64xf32>
-        ascendc.mul_l2 %inner, %tensor, %0, %c64_i64 {direction = #ascendc.copy_direction<gm, veccalc>} : !ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>, i64
-        scf.yield %inner : !ascendc.local_tensor<64xf32>
-    }
-    return
-}
-
-// CHECK-LABEL: func.func @scf_for_init_arg_used_twice(%arg0: !ascendc.global_tensor<*xf32>) {
-// CHECK:         %0 = ascendc.local_tensor_auto veccalc() : <64xf32>
-// CHECK-NEXT:    %1 = ascendc.local_tensor_auto veccalc() : <64xf32>
-// CHECK-NEXT:    ascendc.if_aiv {
-// CHECK-NEXT:        %c64_i64_0 = arith.constant 64 : i64
-// CHECK-NEXT:        ascendc.data_copy_l2 %1, %0, %c64_i64_0 {direction = #ascendc.copy_direction<veccalc, veccalc>} : !ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>, i64
-// CHECK-NEXT:    }
-// CHECK-NEXT:    %2:2 = scf.for %arg1 = %c0 to %c10 step %c1 iter_args(%arg2 = %0, %arg3 = %1) -> (!ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>) {
-// CHECK-NEXT:      %3 = ascendc.local_tensor_auto veccalc() : <64xf32>
-// CHECK-NEXT:      ascendc.mul_l2 %3, %arg2, %arg3, %c64_i64 {direction = #ascendc.copy_direction<gm, veccalc>} : !ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>, i64
-// CHECK-NEXT:      scf.yield %3, %arg3 : !ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>
-// CHECK-NEXT:    }
-// CHECK-NEXT:    return
-// CHECK-NEXT:  }
-func.func @scf_for_init_arg_used_twice(%arg0: !ascendc.global_tensor<*xf32>) {
-    %c0 = arith.constant 0 : index
-    %c10 = arith.constant 10 : index
-    %c1 = arith.constant 1 : index
-    %c2 = arith.constant 2.0 : f32
-    %c64_i64 = arith.constant 64 : i64
-    %0 = ascendc.local_tensor_auto veccalc() : <64xf32>
-    %result:2 = scf.for %i = %c0 to %c10 step %c1 iter_args(%tensor1 = %0, %tensor2 = %0) -> (!ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>) {
-        %inner = ascendc.local_tensor_auto veccalc() : <64xf32>
-        ascendc.mul_l2 %inner, %tensor1, %tensor2, %c64_i64 {direction = #ascendc.copy_direction<gm, veccalc>} : !ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>, i64
-        scf.yield %inner, %tensor2 : !ascendc.local_tensor<64xf32>, !ascendc.local_tensor<64xf32>
     }
     return
 }

@@ -109,6 +109,15 @@ def MaterializeLoadStore : Pass<"ascvf-materialize-load-store", "func::FuncOp"> 
   let dependentDialects = ["ascendc::AscendCDialect", "emitasc::EmitAscDialect"];
 }
 
+def PromoteCastOps : Pass<"ascvf-hoist-cast", "func::FuncOp"> {
+  let summary = "Hoists LocalTensorReinterpretCastOp operations immediately after their defining operations";
+  let description = [{
+    Relocates each LocalTensorReinterpretCastOp to immediately after the operation
+    that defines its input tensor, placing the cast right after its source.
+  }];
+  let constructor = "mlir::ascvf::createPromoteCastOpsPass()";
+}
+
 def ReorderOpsInVecScope : Pass<"ascvf-reorder-ops-in-vec-scope", "func::FuncOp"> {
   let summary = "Hoists and reorders operations within VecScopeOp blocks";
   let description = [{

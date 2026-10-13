@@ -12,7 +12,6 @@
 #include "asctile/Dialect/AscVF/Transforms/Passes.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/IR/Builders.h"
 
 namespace mlir {
 namespace ascvf {
@@ -29,7 +28,6 @@ struct InlineVFGroupPass : public ascvf::impl::InlineVFGroupBase<InlineVFGroupPa
     void runOnOperation() override
     {
         getOperation().walk([](ascvf::VFGroupOp op) {
-            OpBuilder builder(op);
             Block* body = op.getBody();
             auto* yieldOp = body->getTerminator();
             op->getBlock()->getOperations().splice(op->getIterator(), body->getOperations());

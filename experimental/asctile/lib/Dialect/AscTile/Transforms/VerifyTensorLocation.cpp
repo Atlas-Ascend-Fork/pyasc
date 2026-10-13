@@ -104,6 +104,13 @@ void VerifyTensorLocationPass::runOnOperation()
         if (badLoc(op, op.getOperand().getType(), "input", allow))
             signalPassFailure();
     });
+    funcOp.walk([this](DumpTensorOp op) {
+        auto type = dyn_cast<LocalTensorType>(op.getTensor().getType());
+        if (!type)
+            return;
+        if (badLoc(op, type, "tensor", {TL::L1, TL::UB}))
+            signalPassFailure();
+    });
 }
 
 } // namespace

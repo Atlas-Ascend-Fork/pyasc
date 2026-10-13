@@ -13,6 +13,7 @@ from asc._C import ir
 from asc._C.libpyasc import asctile
 from asc.runtime.jit import JITFunction as JITFunctionBase
 
+from .codegen import FunctionVisitor
 from .compiler import Compiler
 from .custom_builtins import get_custom_builtins
 
@@ -21,6 +22,7 @@ T = TypeVar("T")
 
 
 class JITFunction(JITFunctionBase[P, T]):
+    codegen = FunctionVisitor
     compiler = Compiler
 
     @staticmethod

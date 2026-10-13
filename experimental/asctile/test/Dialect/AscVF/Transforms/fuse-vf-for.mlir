@@ -14,11 +14,11 @@
 // CHECK-NEXT:  %1 = ascendc.create_mask f32, ALL : !ascendc.mask_reg
 // CHECK-NEXT:  emitasc.vf_for %c0 : index {
 // CHECK-NEXT:  ^bb0(%arg1: index):
-// CHECK-NEXT:    ascvf.load %0, %arg0[%arg1], %1 : <f32>, <1024xf32>, index, !ascendc.mask_reg
+// CHECK-NEXT:    ascvf.load %0, %arg0[%arg1], %1 : !ascendc.reg_tensor<f32>, <1024xf32>, index, !ascendc.mask_reg
 // CHECK-NEXT:    ascendc.add_reg %0, %0, %0, %1 : !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
-// CHECK-NEXT:    ascvf.load %0, %arg0[%arg1], %1 : <f32>, <1024xf32>, index, !ascendc.mask_reg
+// CHECK-NEXT:    ascvf.load %0, %arg0[%arg1], %1 : !ascendc.reg_tensor<f32>, <1024xf32>, index, !ascendc.mask_reg
 // CHECK-NEXT:    ascendc.add_reg %0, %0, %0, %1 : !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
-// CHECK-NEXT:    ascvf.load %0, %arg0[%arg1], %1 : <f32>, <1024xf32>, index, !ascendc.mask_reg
+// CHECK-NEXT:    ascvf.load %0, %arg0[%arg1], %1 : !ascendc.reg_tensor<f32>, <1024xf32>, index, !ascendc.mask_reg
 // CHECK-NEXT:    ascendc.add_reg %0, %0, %0, %1 : !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
 // CHECK-NEXT:  }
 // CHECK-NEXT:}
@@ -54,7 +54,7 @@ func.func @fuse_sequential_same_upper_bound(%arg0: !ascendc.local_tensor<1024xf3
 // CHECK-NEXT:  ^bb0(%arg1: index):
 // CHECK-NEXT:    ascendc.add_reg %0, %0, %0, %1 : !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
 // CHECK-NEXT:  }
-// CHECK-NEXT:  ascvf.load %0, %arg0[%c0], %1 : <f32>, <1024xf32>, index, !ascendc.mask_reg
+// CHECK-NEXT:  ascvf.load %0, %arg0[%c0], %1 : !ascendc.reg_tensor<f32>, <1024xf32>, index, !ascendc.mask_reg
 // CHECK-NEXT:  emitasc.vf_for %c0 : index {
 // CHECK-NEXT:  ^bb0(%arg1: index):
 // CHECK-NEXT:    ascendc.add_reg %0, %0, %0, %1 : !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg

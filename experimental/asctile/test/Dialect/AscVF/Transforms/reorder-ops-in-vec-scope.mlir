@@ -31,10 +31,10 @@
 // CHECK-NEXT:  %12 = arith.divsi %10, %c5 : index
 // CHECK-NEXT:  %13 = arith.subi %12, %c5 : index
 // CHECK-NEXT:  %14 = arith.addi %13, %c5 : index
-// CHECK-NEXT:  ascvf.load %2, %arg0[%c64], %3 : <f32>, <1xf32>, index, !ascendc.mask_reg
+// CHECK-NEXT:  ascvf.load %2, %arg0[%c64], %3 : !ascendc.reg_tensor<f32>, <1xf32>, index, !ascendc.mask_reg
 // CHECK-NEXT:  %15 = ascendc.update_mask f32, %5 : memref<1xui32>
 // CHECK-NEXT:  ascendc.select_reg %1, %2, %0, %15 : !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
-// CHECK-NEXT:  ascvf.store %arg0[%14], %1, %4 : <1xf32>, index, <f32>, !ascendc.mask_reg
+// CHECK-NEXT:  ascvf.store %arg0[%14], %1, %4 : <1xf32>, index, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
 // CHECK-NEXT:}
 func.func @reorder_supported_ops(%arg0: !ascendc.local_tensor<1xf32>) {
   emitasc.vec_scope {
@@ -82,7 +82,7 @@ func.func @reorder_supported_ops(%arg0: !ascendc.local_tensor<1xf32>) {
 // CHECK-NEXT:   %5 = arith.divsi %4, %c64 : index
 // CHECK-NEXT:   %6 = arith.subi %5, %c64 : index
 // CHECK-NEXT:   %7 = ascendc.update_mask f32, %2 : memref<1xui32>
-// CHECK-NEXT:   ascvf.load %1, %arg0[%6], %3 : <f32>, <1xf32>, index, !ascendc.mask_reg
+// CHECK-NEXT:   ascvf.load %1, %arg0[%6], %3 : !ascendc.reg_tensor<f32>, <1xf32>, index, !ascendc.mask_reg
 // CHECK-NEXT: }
 // CHECK-NEXT:}
 func.func @reorder_inside_block(%arg0: !ascendc.local_tensor<1xf32>) {

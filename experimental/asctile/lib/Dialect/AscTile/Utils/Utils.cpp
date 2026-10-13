@@ -39,6 +39,12 @@ OpFoldResult getSplatValue(Value cstTile)
     return {};
 }
 
+unsigned getSplitAxis(DistribMode mode, size_t rank)
+{
+    assert((rank == 1 || rank == 2) && "CV strategy supports 1D and 2D tensors");
+    return rank == 1 || mode == DistribMode::SplitByM ? 0 : 1;
+}
+
 SmallVector<Value> getTensorShape(OpBuilder& builder, asctile::TensorOp tensorOp)
 {
     ascir::ConstantOpBuilder consts(builder);

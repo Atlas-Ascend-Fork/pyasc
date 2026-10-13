@@ -114,3 +114,34 @@ func.func @invalid_auto_result(%arg0: tensor<128xf32, #asctile.global>) -> tenso
   %0 = asctile.load %arg0[%c0] : tensor<128xf32, #asctile.global>, tensor<32xf32, #asctile.local<auto>>
   return %0 : tensor<32xf32, #asctile.local<auto>>
 }
+
+// -----
+
+func.func @valid_copy_with_distrib(%arg0: tensor<32x64xf32, #asctile.local<L0C>>) -> tensor<16x64xf32, #asctile.local<UB>> {
+  %c0 = arith.constant 0 : i32
+  %0 = asctile.copy %arg0[%c0, %c0] {distrib = #asctile.distrib_mode<split_by_m>} : tensor<32x64xf32, #asctile.local<L0C>>, tensor<16x64xf32, #asctile.local<UB>>
+  return %0 : tensor<16x64xf32, #asctile.local<UB>>
+}
+
+// -----
+
+func.func @valid_copy_ub_l1_with_distrib(%arg0: tensor<16x64xf32, #asctile.local<UB>>) -> tensor<16x128xf32, #asctile.local<L1>> {
+  %c0 = arith.constant 0 : i32
+  %0 = asctile.copy %arg0[%c0, %c0] {distrib = #asctile.distrib_mode<join_by_n>} : tensor<16x64xf32, #asctile.local<UB>>, tensor<16x128xf32, #asctile.local<L1>>
+  return %0 : tensor<16x128xf32, #asctile.local<L1>>
+}
+
+// -----
+
+func.func @valid_dump_l1_tensor(%arg0: tensor<32xf32, #asctile.local<L1>>) {
+  asctile.dump_tensor %arg0 : tensor<32xf32, #asctile.local<L1>>
+  return
+}
+
+// -----
+
+func.func @invalid_dump_l0a_tensor(%arg0: tensor<32xf32, #asctile.local<L0A>>) {
+  // expected-error@+1 {{tensor tensor location must be L1, UB, got L0A}}
+  asctile.dump_tensor %arg0 : tensor<32xf32, #asctile.local<L0A>>
+  return
+}

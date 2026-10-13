@@ -14,6 +14,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/TypeRange.h"
@@ -85,6 +86,20 @@ LogicalResult acceptOperandLoc(PatternRewriter& rewriter, OpOperand* opnd, LocRa
         return failure();
     rewriter.modifyOpInPlace(opnd->getOwner(), [&] { opnd->assign(tensor); });
     return success();
+}
+
+void handleYieldOperands(PatternRewriter& rewriter, MutableArrayRef<OpOperand> operands, TypeRange resultTypes)
+{
+    for (auto& opnd : operands) {
+        (void)acceptOperandLoc(rewriter, &opnd);
+        auto newType = resultTypes[opnd.getOperandNumber()];
+        Value oldValue = opnd.get();
+        if (oldValue.getType() == newType)
+            continue;
+        rewriter.setInsertionPoint(opnd.getOwner());
+        Value newValue = rewriter.create<tensor::CastOp>(oldValue.getLoc(), newType, oldValue);
+        rewriter.modifyOpInPlace(opnd.getOwner(), [&] { opnd.set(newValue); });
+    }
 }
 
 template <typename... OpTypes>
@@ -298,10 +313,51 @@ struct AcceptIfLoc : OpRewritePattern<scf::IfOp> {
             (void)acceptResultLoc(rewriter, result);
         if (oldTypes == op->getResultTypes())
             return failure();
-        handleOperands(rewriter, op.thenYield()->getOpOperands(), op->getResultTypes());
+        handleYieldOperands(rewriter, op.thenYield()->getOpOperands(), op->getResultTypes());
         if (op.elseBlock())
-            handleOperands(rewriter, op.elseYield()->getOpOperands(), op->getResultTypes());
+            handleYieldOperands(rewriter, op.elseYield()->getOpOperands(), op->getResultTypes());
         return success();
+    }
+};
+
+struct AcceptCVStrategyLoc : OpRewritePattern<CVStrategyOp> {
+    using OpRewritePattern::OpRewritePattern;
+
+    LogicalResult matchAndRewrite(CVStrategyOp op, PatternRewriter& rewriter) const override
+    {
+        if (op.getNumResults() == 0)
+            return failure();
+        SmallVector<Type> oldTypes(op->getResultTypes());
+        for (auto result : op->getOpResults())
+            (void)acceptResultLoc(rewriter, result);
+        if (oldTypes == op->getResultTypes())
+            return failure();
+        handleYieldOperands(rewriter, op.getBody()->getTerminator()->getOpOperands(), op->getResultTypes());
+        return success();
+    }
+};
+
+struct AcceptInlineLoc : OpRewritePattern<InlineOp> {
+    using OpRewritePattern::OpRewritePattern;
+
+    LogicalResult matchAndRewrite(InlineOp op, PatternRewriter& rewriter) const override
+    {
+        auto matchResult = failure();
+        for (auto& opnd : op.getArgsMutable())
+            if (acceptOperandLoc(rewriter, &opnd).succeeded())
+                matchResult = success();
+        return matchResult;
+    }
+};
+
+struct AcceptUnrealizedConversionCastLoc : OpRewritePattern<UnrealizedConversionCastOp> {
+    using OpRewritePattern::OpRewritePattern;
+
+    LogicalResult matchAndRewrite(UnrealizedConversionCastOp op, PatternRewriter& rewriter) const override
+    {
+        if (op->getNumOperands() != 1)
+            return failure();
+        return acceptOperandLoc(rewriter, &op->getOpOperand(0));
     }
 };
 
@@ -323,22 +379,28 @@ struct ReconcileTensorCast : OpRewritePattern<tensor::CastOp> {
     }
 };
 
-void populateFirstStage(RewritePatternSet& patterns)
+void populateCommon(RewritePatternSet& patterns, PatternBenefit benefit = 1)
 {
     auto* context = patterns.getContext();
     patterns.add<
-        AcceptLoadLoc, AcceptCopyLoc, AcceptStoreLoc, AcceptSetValueLoc, AcceptDumpTensorLoc, AcceptCastLoc,
-        AcceptReluLoc, AcceptReshapeLoc, AcceptTransposeLoc, AcceptForLoc, AcceptIfLoc, ReconcileTensorCast>(context);
+        AcceptCopyLoc, AcceptSetValueLoc, AcceptDumpTensorLoc, AcceptForLoc, AcceptIfLoc, AcceptCVStrategyLoc,
+        AcceptInlineLoc, AcceptUnrealizedConversionCastLoc, ReconcileTensorCast>(context, benefit);
+}
+
+void populateFirstStage(RewritePatternSet& patterns)
+{
+    auto* context = patterns.getContext();
+    populateCommon(patterns);
+    patterns.add<AcceptLoadLoc, AcceptStoreLoc, AcceptCastLoc, AcceptReluLoc, AcceptReshapeLoc, AcceptTransposeLoc>(
+        context);
 }
 
 void populateSecondStage(RewritePatternSet& patterns)
 {
     enum : unsigned { LowBenefit = 1, HighBenefit = 10 };
     auto* context = patterns.getContext();
-    patterns
-        .add<AcceptCopyLoc, AcceptSetValueLoc, AcceptDumpTensorLoc, AcceptForLoc, AcceptIfLoc, ReconcileTensorCast>(
-            context, LowBenefit)
-        .add<RequireSameLoc<LoadOp, StoreOp>>(context, std::nullopt, TL::UB, LowBenefit)
+    populateCommon(patterns, LowBenefit);
+    patterns.add<RequireSameLoc<LoadOp, StoreOp>>(context, std::nullopt, TL::UB, LowBenefit)
         .add<RequireSameLoc<CastOp, ReluOp>>(context, LocRange{TL::UB, TL::L0C}, TL::UB, HighBenefit)
         .add<RequireSameLoc<ReshapeOp>>(context, std::nullopt, TL::UB, HighBenefit)
         .add<RequireSameLoc<TransposeOp>>(context, LocRange{TL::UB, TL::L1, TL::L0A, TL::L0B}, TL::UB, HighBenefit);

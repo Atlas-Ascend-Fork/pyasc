@@ -436,7 +436,7 @@ struct ConvertLoadToL1 : ConvertOp<asctile::LoadOp> {
         Value dValue = rewriter.create<arith::MinSIOp>(loc, dstShapeCols, availableCols);
         if (isMatrixA && isTransposeAL1) {
             auto dstType = dst.getType();
-            auto dstNzC0Stride = consts.i32(dstShape[0]);
+            auto dstNzC0Stride = consts.i32(static_cast<int32_t>(llvm::alignTo(dstShape[0], ascendc::cubeBlockSize)));
             auto dn2NzParams = rewriter.create<ascendc::ConstructOp>(
                 loc, rewriter.getType<ascendc::Dn2NzParamsType>(),
                 ValueRange{const1, dValue, nValue, const0, srcInfo.shape[1], dstNzC0Stride, const1, const0}, argTypes);
@@ -510,8 +510,12 @@ struct ConvertLoadToL1 : ConvertOp<asctile::LoadOp> {
                 rewriter.setInsertionPointToStart(rowPadIf.thenBlock());
                 auto colBlocks = consts.i32((isTransposeAL1 ? dstShape[0] : dstShape[1]) / cubeKBlockSize);
                 auto rowOffset = rewriter.create<arith::MulIOp>(loc, nValue, c0Size);
-                auto blockNum =
-                    rewriter.create<arith::SubIOp>(loc, consts.i32(isTransposeAL1 ? dstShape[1] : dstShape[0]), nValue);
+                auto blockNum = rewriter.create<arith::SubIOp>(
+                    loc,
+                    consts.i32(
+                        static_cast<int32_t>(
+                            llvm::alignTo(isTransposeAL1 ? dstShape[1] : dstShape[0], ascendc::cubeBlockSize))),
+                    nValue);
                 auto padTensor = rewriter.create<ascendc::LocalTensorSubIndexOp>(loc, dst.getType(), dst, rowOffset);
                 auto params = rewriter.create<ascendc::ConstructOp>(
                     loc, rewriter.getType<ascendc::InitConstValueParamsType>(),
@@ -519,19 +523,19 @@ struct ConvertLoadToL1 : ConvertOp<asctile::LoadOp> {
                 rewriter.create<ascendc::FillOp>(loc, padTensor, params.getResult());
             }
         } else {
-            auto dValueBytes = rewriter.create<arith::MulIOp>(loc, dValue, elemSizeVal);
-            auto totalBytes = consts.i32((isTransposeBL1 ? dstShape[0] : dstShape[1]) * elementSize);
-            auto padBytes = rewriter.create<arith::SubIOp>(loc, totalBytes, dValueBytes);
-            auto padBlocks = rewriter.create<arith::DivSIOp>(loc, padBytes, blockSizeVal);
+            auto dValueC0 = rewriter.create<arith::CeilDivSIOp>(loc, dValue, c0Size);
+            auto totalWidthC0 =
+                consts.i32(llvm::divideCeilSigned(isTransposeBL1 ? dstShape[0] : dstShape[1], cubeKBlockSize));
+            auto padBlocks = rewriter.create<arith::SubIOp>(loc, totalWidthC0, dValueC0);
             auto needsColPad = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::sgt, padBlocks, const0);
             auto colPadIf = rewriter.create<scf::IfOp>(loc, needsColPad);
             {
                 ConvertRewriter::InsertionGuard guard(rewriter);
                 rewriter.setInsertionPointToStart(colPadIf.thenBlock());
-                auto colOffset =
-                    rewriter.create<arith::MulIOp>(loc, dValue, consts.i32(isTransposeBL1 ? dstShape[1] : dstShape[0]));
-                auto blockNum = rewriter.create<arith::MulIOp>(
-                    loc, padBlocks, consts.i32(isTransposeBL1 ? dstShape[1] : dstShape[0]));
+                auto rowStride = static_cast<int32_t>(
+                    llvm::alignTo(isTransposeBL1 ? dstShape[1] : dstShape[0], ascendc::cubeBlockSize));
+                auto colOffset = rewriter.create<arith::MulIOp>(loc, dValueC0, consts.i32(rowStride * cubeKBlockSize));
+                auto blockNum = rewriter.create<arith::MulIOp>(loc, padBlocks, consts.i32(rowStride));
                 auto padTensor = rewriter.create<ascendc::LocalTensorSubIndexOp>(loc, dst.getType(), dst, colOffset);
                 auto params = rewriter.create<ascendc::ConstructOp>(
                     loc, rewriter.getType<ascendc::InitConstValueParamsType>(),
@@ -864,6 +868,23 @@ struct ConvertCopyFixpipe : ConvertOp<asctile::CopyFixpipeOp> {
                 rewriter.getTypeArrayAttr(rewriter.getType<ascendc::QuantModesType>()), true, true);
             paramsBuilder.addField("quantPre", quantMode);
         }
+        if (auto maybeSplit = op.getDistrib()) {
+            asctile::DistribMode split = *maybeSplit;
+            char dualDstCtl = 0;
+            if (split == asctile::DistribMode::JoinByM || split == asctile::DistribMode::JoinByN)
+                return op.emitError() << "Unsupported distribute mode JoinByM or JoinByN";
+            if (split == asctile::DistribMode::SplitByM)
+                dualDstCtl = 1;
+            else if (split == asctile::DistribMode::SplitByN)
+                dualDstCtl = 2;
+            if (dualDstCtl != 0 && (op.getRelu() || op.getQuantize()))
+                return op.emitOpError("cannot have relu/quantize and dual destination enabled at the same time");
+            paramsBuilder.addField("dualDstCtl", consts.i8(dualDstCtl));
+            if (split == asctile::DistribMode::FullVec0)
+                paramsBuilder.addField("subBlockId", consts.i1(false));
+            else if (split == asctile::DistribMode::FullVec1)
+                paramsBuilder.addField("subBlockId", consts.i1(true));
+        }
         Value params = paramsBuilder.create(rewriter, loc);
         Value layout = rewriter.create<ascendc::ConstructOp>(
             loc, rewriter.getType<ascendc::CO2LayoutType>(), ValueRange{consts.i32(static_cast<int32_t>(co2Layout))},
@@ -915,7 +936,7 @@ Value buildLoadData2DV2Params(
         .create(builder, loc);
 }
 
-struct ConvertCopy : ConvertOp<asctile::CopyOp> {
+struct ConvertCopyUBToL1 : ConvertOp<asctile::CopyOp> {
     using ConvertOp::ConvertOp;
     using ConvertOp::createTensorOp;
 
@@ -923,9 +944,180 @@ struct ConvertCopy : ConvertOp<asctile::CopyOp> {
     {
         auto opType = op.getType();
         auto dstPos = opType.getLoc();
-        if (dstPos != asctile::TensorLocation::L0A && dstPos != asctile::TensorLocation::L0B &&
-            dstPos != asctile::TensorLocation::BT && dstPos != asctile::TensorLocation::L1)
-            return op.emitOpError("has invalid location of the result tensor");
+        if (dstPos != asctile::TensorLocation::L1)
+            return failure();
+        auto loc = op.getLoc();
+        auto base = op.getBase();
+        auto srcLoc = base.getType().getLoc();
+        if (srcLoc != asctile::TensorLocation::UB)
+            return op.emitError("L1 destination requires UB source");
+        Value src = rewriter.getRemappedValue(base);
+        auto srcType = src.getType();
+        auto srcShape = base.getType().getShape();
+        if (srcShape.size() != 2)
+            return op.emitOpError("only supports 2D tensor");
+        auto offsets = op.getOffsets();
+        ascir::ConstantOpBuilder consts(rewriter);
+        auto dst = createTensorOp(rewriter, loc, opType, locationToPosition(dstPos)).getResult();
+        auto srcTensorType = cast<ascendc::BaseTensorType>(srcType);
+        auto elemType = srcTensorType.getElementType();
+        int64_t elementSize = ascendc::getElementTypeSize(srcTensorType);
+        auto dstShape = opType.getShape();
+        int64_t height = dstShape[0];
+        int64_t width = dstShape[1];
+        int64_t srcWidth = srcShape[1];
+        auto cubeKBlockSize = static_cast<int64_t>(ascendc::cubeKBlockBytes) / elementSize;
+        auto colBlocks = width / cubeKBlockSize;
+        auto srcColBlocks = srcWidth / cubeKBlockSize;
+        auto heightAligned =
+            srcShape[0] > 1 ? static_cast<int64_t>(llvm::alignTo(height, ascendc::cubeBlockSize)) : height;
+        auto totalElements = heightAligned * width;
+        auto const0 = consts.i32(0);
+        auto const1 = consts.i32(1);
+        bool dualVector = false;
+        if (auto attr = ascendc::getModule(op)->getAttrOfType<IntegerAttr>(ascendc::attr::cvRatio))
+            dualVector = attr.getValue().getSExtValue() == 2;
+        auto distrib = op.getDistrib();
+        bool joinByN = distrib && *distrib == asctile::DistribMode::JoinByN;
+        bool directToL1 = dualVector && !offsets.empty() && !distrib;
+        bool shapeSplitVecByN = directToL1 && srcShape[0] == height && srcWidth * 2 == width;
+        Value colShift = const0;
+        Value rowOffsetElements = const0;
+        Value colBlockShiftElements = const0;
+        Value fullVecGuard;
+        int64_t copyCount = height;
+        int64_t loopColBlocks = colBlocks;
+        if (distrib) {
+            if (!dualVector)
+                return op.emitOpError(
+                    "'distrib' argument for UB to L1 copies is only supported in dual-vector kernels (cv_ratio=2)");
+            if (*distrib == asctile::DistribMode::SplitByM || *distrib == asctile::DistribMode::SplitByN) {
+                return op.emitOpError("SplitVecByM and SplitVecByN modes are not supported when copying from UB to L1");
+            }
+            Value subBlockIdx = rewriter.create<ascendc::GetSubBlockIdxOp>(loc, rewriter.getI32Type());
+            Value rowOffset = offsets.empty() ? const0 : rewriter.getRemappedValue(offsets[0]);
+            Value colOffset = offsets.size() > 1 ? rewriter.getRemappedValue(offsets[1]) : const0;
+            if (*distrib == asctile::DistribMode::JoinByM) {
+                Value slotRows = rewriter.create<arith::MulIOp>(loc, consts.i32(height / 2), subBlockIdx);
+                Value dstRow = rewriter.create<arith::AddIOp>(loc, slotRows, rowOffset);
+                rowOffsetElements = rewriter.create<arith::MulIOp>(loc, dstRow, consts.i32(cubeKBlockSize));
+                colShift = colOffset;
+            } else if (*distrib == asctile::DistribMode::JoinByN) {
+                Value slotBlocks =
+                    rewriter.create<arith::MulIOp>(loc, consts.i32(width / 2 / cubeKBlockSize), subBlockIdx);
+                Value colBlockOffset = rewriter.create<arith::DivSIOp>(loc, colOffset, consts.i32(cubeKBlockSize));
+                Value dstBlock = rewriter.create<arith::AddIOp>(loc, slotBlocks, colBlockOffset);
+                colBlockShiftElements =
+                    rewriter.create<arith::MulIOp>(loc, dstBlock, consts.i32(heightAligned * cubeKBlockSize));
+                rowOffsetElements = rewriter.create<arith::MulIOp>(loc, rowOffset, consts.i32(cubeKBlockSize));
+                loopColBlocks = srcColBlocks;
+            } else {
+                fullVecGuard = rewriter.create<arith::CmpIOp>(
+                    loc, arith::CmpIPredicate::eq, subBlockIdx,
+                    consts.i32(*distrib == asctile::DistribMode::FullVec0 ? 0 : 1));
+                rowOffsetElements = rewriter.create<arith::MulIOp>(loc, rowOffset, consts.i32(cubeKBlockSize));
+                colShift = colOffset;
+            }
+            copyCount = srcShape[0];
+        } else if (shapeSplitVecByN) {
+            Value colOffset = offsets.size() > 1 ? rewriter.getRemappedValue(offsets[1]) : const0;
+            Value colBlockOffset = rewriter.create<arith::DivSIOp>(loc, colOffset, consts.i32(cubeKBlockSize));
+            colBlockShiftElements =
+                rewriter.create<arith::MulIOp>(loc, colBlockOffset, consts.i32(heightAligned * cubeKBlockSize));
+            copyCount = srcShape[0];
+            loopColBlocks = srcColBlocks;
+        } else if (directToL1) {
+            Value rowOffset = rewriter.getRemappedValue(offsets[0]);
+            rowOffsetElements = rewriter.create<arith::MulIOp>(loc, rowOffset, consts.i32(cubeKBlockSize));
+            colShift = offsets.size() > 1 ? rewriter.getRemappedValue(offsets[1]) : const0;
+            copyCount = srcShape[0];
+        } else if (!offsets.empty()) {
+            Value linearOffset = linearizeOffset(rewriter, loc, getStaticShape(rewriter, srcTensorType), offsets);
+            src = rewriter.create<ascendc::LocalTensorSubIndexOp>(loc, srcTensorType, src, linearOffset);
+        }
+        auto dstTensorType = cast<ascendc::BaseTensorType>(dst.getType());
+        auto dataCopyParams = rewriter.create<ascendc::ConstructOp>(
+            loc, rewriter.getType<ascendc::DataCopyParamsType>(),
+            ValueRange{consts.i32(copyCount), const1, consts.i32(srcColBlocks - 1), const0});
+        scf::IfOp guardIf;
+        if (fullVecGuard) {
+            guardIf = rewriter.create<scf::IfOp>(loc, fullVecGuard, false);
+            rewriter.setInsertionPointToStart(guardIf.thenBlock());
+        }
+        auto forOp = rewriter.create<scf::ForOp>(loc, const0, consts.i32(loopColBlocks), const1);
+        {
+            ConvertRewriter::InsertionGuard guard(rewriter);
+            rewriter.setInsertionPointToStart(forOp.getBody());
+            auto colIdx = forOp.getInductionVar();
+            auto srcColOffset = rewriter.create<arith::MulIOp>(loc, colIdx, consts.i32(cubeKBlockSize));
+            auto srcOffset = rewriter.create<arith::AddIOp>(loc, srcColOffset, colShift);
+            auto srcView = rewriter.create<ascendc::LocalTensorSubIndexOp>(loc, srcTensorType, src, srcOffset);
+            auto blockOffset = rewriter.create<arith::MulIOp>(loc, colIdx, consts.i32(heightAligned * cubeKBlockSize));
+            Value dstOffset = rewriter.create<arith::AddIOp>(loc, blockOffset, rowOffsetElements);
+            if (joinByN || shapeSplitVecByN)
+                dstOffset = rewriter.create<arith::AddIOp>(loc, dstOffset, colBlockShiftElements);
+            auto dstView = rewriter.create<ascendc::LocalTensorSubIndexOp>(loc, dstTensorType, dst, dstOffset);
+            auto innerCopyOp = rewriter.create<ascendc::DataCopyL2Op>(loc, dstView, srcView, dataCopyParams);
+            innerCopyOp.setDirection(ascendc::TPosition::VECCALC, ascendc::TPosition::A1);
+        }
+        rewriter.setInsertionPointAfter(forOp);
+        if (fullVecGuard)
+            rewriter.setInsertionPointAfter(guardIf);
+        rewriter.replaceOp(op, dst);
+        return success();
+    }
+};
+
+struct ConvertCopyL1ToBT : ConvertOp<asctile::CopyOp> {
+    using ConvertOp::ConvertOp;
+    using ConvertOp::createTensorOp;
+
+    LogicalResult matchAndRewrite(asctile::CopyOp op, ConvertRewriter& rewriter) const override
+    {
+        auto opType = op.getType();
+        auto dstPos = opType.getLoc();
+        if (dstPos != asctile::TensorLocation::BT)
+            return failure();
+        auto loc = op.getLoc();
+        auto base = op.getBase();
+        auto srcLoc = base.getType().getLoc();
+        if (srcLoc != asctile::TensorLocation::L1) {
+            op.emitError() << "BT destination requires L1 source for bias copy";
+            return failure();
+        }
+        Value src = rewriter.getRemappedValue(base);
+        auto srcType = src.getType();
+        auto srcShape = base.getType().getShape();
+        if (srcShape.size() != 1)
+            return op.emitError() << "bias must have 1D shape";
+        auto offsets = op.getOffsets();
+        ascir::ConstantOpBuilder consts(rewriter);
+        auto dst = createTensorOp(rewriter, loc, opType).getResult();
+        auto dstShape = opType.getShape();
+        if (!offsets.empty())
+            src = rewriter.create<ascendc::LocalTensorSubIndexOp>(loc, srcType, src, offsets[0]);
+        int64_t typeSize = ascendc::getElementTypeSize(base.getType());
+        int64_t blockLen = (dstShape[0] * typeSize) / ascendc::cubeKBlockBytes;
+        auto dataCopyParams = rewriter.create<ascendc::ConstructOp>(
+            loc, rewriter.getType<ascendc::DataCopyParamsType>(),
+            ValueRange{consts.i32(1), consts.i32(blockLen), consts.i32(0), consts.i32(0)});
+        auto copyOp = rewriter.create<ascendc::DataCopyL0Op>(loc, dst, src, dataCopyParams);
+        setCopyDirection(copyOp);
+        rewriter.replaceOp(op, dst);
+        return success();
+    }
+};
+
+struct ConvertCopyL1ToL0 : ConvertOp<asctile::CopyOp> {
+    using ConvertOp::ConvertOp;
+    using ConvertOp::createTensorOp;
+
+    LogicalResult matchAndRewrite(asctile::CopyOp op, ConvertRewriter& rewriter) const override
+    {
+        auto opType = op.getType();
+        auto dstPos = opType.getLoc();
+        if (dstPos != asctile::TensorLocation::L0A && dstPos != asctile::TensorLocation::L0B)
+            return failure();
         auto loc = op.getLoc();
         auto base = op.getBase();
         Value src = rewriter.getRemappedValue(base);
@@ -933,79 +1125,6 @@ struct ConvertCopy : ConvertOp<asctile::CopyOp> {
         auto srcShape = base.getType().getShape();
         auto offsets = op.getOffsets();
         ascir::ConstantOpBuilder consts(rewriter);
-        if (dstPos == asctile::TensorLocation::L1) {
-            if (srcShape.size() != 2)
-                return op.emitOpError("only supports 2D tensor");
-            auto srcLoc = base.getType().getLoc();
-            if (srcLoc != asctile::TensorLocation::UB)
-                return op.emitError("L1 destination requires UB source");
-            auto dst = createTensorOp(rewriter, loc, opType, locationToPosition(dstPos)).getResult();
-            auto srcTensorType = cast<ascendc::BaseTensorType>(srcType);
-            auto elemType = srcTensorType.getElementType();
-            int64_t elementSize = ascendc::getElementTypeSize(srcTensorType);
-            auto dstShape = opType.getShape();
-            int64_t height = dstShape[0];
-            int64_t width = dstShape[1];
-            int64_t srcWidth = srcShape[1];
-            if (!offsets.empty()) {
-                Value linearOffset = linearizeOffset(rewriter, loc, getStaticShape(rewriter, srcTensorType), offsets);
-                src = rewriter.create<ascendc::LocalTensorSubIndexOp>(loc, srcTensorType, src, linearOffset);
-            }
-            auto cubeKBlockSize = static_cast<int64_t>(ascendc::cubeKBlockBytes) / elementSize;
-            auto colBlocks = width / cubeKBlockSize;
-            auto srcColBlocks = srcWidth / cubeKBlockSize;
-            auto heightAligned =
-                srcShape[0] > 1 ? static_cast<int64_t>(llvm::alignTo(height, ascendc::cubeBlockSize)) : height;
-            auto totalElements = heightAligned * width;
-            auto const0 = consts.i32(0);
-            auto const1 = consts.i32(1);
-            auto tempUB = createTensorOp(rewriter, loc, {totalElements}, elemType).getResult();
-            auto dataCopyParams = rewriter.create<ascendc::ConstructOp>(
-                loc, rewriter.getType<ascendc::DataCopyParamsType>(),
-                ValueRange{consts.i32(height), const1, consts.i32(srcColBlocks - 1), const0});
-            auto tempType = cast<ascendc::BaseTensorType>(tempUB.getType());
-            auto forOp = rewriter.create<scf::ForOp>(loc, const0, consts.i32(colBlocks), const1);
-            {
-                ConvertRewriter::InsertionGuard guard(rewriter);
-                rewriter.setInsertionPointToStart(forOp.getBody());
-                auto colIdx = forOp.getInductionVar();
-                auto srcOffset = rewriter.create<arith::MulIOp>(loc, colIdx, consts.i32(cubeKBlockSize));
-                auto srcView = rewriter.create<ascendc::LocalTensorSubIndexOp>(loc, srcTensorType, src, srcOffset);
-                auto dstOffset =
-                    rewriter.create<arith::MulIOp>(loc, colIdx, consts.i32(heightAligned * cubeKBlockSize));
-                auto dstView = rewriter.create<ascendc::LocalTensorSubIndexOp>(loc, tempType, tempUB, dstOffset);
-                auto innerCopyOp = rewriter.create<ascendc::DataCopyL2Op>(loc, dstView, srcView, dataCopyParams);
-                innerCopyOp.setDirection(ascendc::TPosition::VECCALC, ascendc::TPosition::VECCALC);
-            }
-            rewriter.setInsertionPointAfter(forOp);
-            auto outerCopyOp = rewriter.create<ascendc::DataCopyL2Op>(loc, dst, tempUB, consts.i32(totalElements));
-            setCopyDirection(outerCopyOp);
-            rewriter.replaceOp(op, dst);
-            return success();
-        }
-        if (dstPos == asctile::TensorLocation::BT) {
-            auto srcLoc = base.getType().getLoc();
-            if (srcLoc != asctile::TensorLocation::L1) {
-                op.emitError() << "BT destination requires L1 source for bias copy";
-                return failure();
-            }
-            auto dst = createTensorOp(rewriter, loc, opType).getResult();
-            auto dstShape = opType.getShape();
-            if (srcShape.size() != 1)
-                return op.emitError() << "bias must have 1D shape";
-            if (!offsets.empty()) {
-                src = rewriter.create<ascendc::LocalTensorSubIndexOp>(loc, srcType, src, offsets[0]);
-            }
-            int64_t typeSize = ascendc::getElementTypeSize(base.getType());
-            int64_t blockLen = (dstShape[0] * typeSize) / ascendc::cubeKBlockBytes;
-            auto dataCopyParams = rewriter.create<ascendc::ConstructOp>(
-                loc, rewriter.getType<ascendc::DataCopyParamsType>(),
-                ValueRange{consts.i32(1), consts.i32(blockLen), consts.i32(0), consts.i32(0)});
-            auto copyOp = rewriter.create<ascendc::DataCopyL0Op>(loc, dst, src, dataCopyParams);
-            setCopyDirection(copyOp);
-            rewriter.replaceOp(op, dst);
-            return success();
-        }
         assert(srcShape.size() == 2 && "supported only tensorShape with 2 dims");
         assert(offsets.size() == srcShape.size() && "must be one offset for each dimension");
         auto dst = createTensorOp(rewriter, loc, opType).getResult();
@@ -1017,10 +1136,10 @@ struct ConvertCopy : ConvertOp<asctile::CopyOp> {
         bool isTransposeBL1 = op->hasAttrOfType<UnitAttr>(asctile::attr::transposeBL1);
         bool isFloat32 = isa<Float32Type>(opType.getElementType());
         const int64_t cubeKBlockSize = ascendc::cubeKBlockBytes / ascendc::getElementTypeSize(opType);
-        int64_t dstNzC0StrideElements =
-            (srcShape[0] > 1 || !isTensorA) ?
-                static_cast<int64_t>(llvm::alignTo(isTransposeBL1 ? srcShape[1] : srcShape[0], cubeKBlockSize)) :
-                1;
+        int64_t dstNzC0StrideElements = (srcShape[0] > 1 || !isTensorA) ?
+                                            static_cast<int64_t>(llvm::alignTo(
+                                                isTransposeBL1 ? srcShape[1] : srcShape[0], ascendc::cubeBlockSize)) :
+                                            1;
         int64_t dValue = cubeKBlockSize;
         Value colOffset = rewriter.create<arith::MulIOp>(
             loc, consts.i32(dstNzC0StrideElements), isTransposeBL1 ? offsets[0] : offsets[1]);
@@ -1317,8 +1436,8 @@ struct LowerAscTileDataTransferPass
         patterns.insert<
             //
             ConvertLoadToUB, ConvertLoadToUBWithTranspose, ConvertLoadToL1, ConvertStore, ConvertStoreFixpipe,
-            ConvertCopy, ConvertGetValue, ConvertSetValue, ConvertCopyFixpipe, ConvertStoreWithTranspose, ConvertGather,
-            ConvertScatter
+            ConvertCopyL1ToL0, ConvertCopyUBToL1, ConvertCopyL1ToBT, ConvertGetValue, ConvertSetValue,
+            ConvertCopyFixpipe, ConvertStoreWithTranspose, ConvertGather, ConvertScatter
             //
             >(converter, context);
         auto op = getOperation();

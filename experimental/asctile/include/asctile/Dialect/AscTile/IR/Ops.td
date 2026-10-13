@@ -35,7 +35,7 @@ def AccumulatorOp : AscTile_Op<"accumulator"> {
 
 def TensorOp : AscTile_Op<"tensor", [Pure]> {
   let summary = "Create tensor";
-  let arguments = (ins AnyRankedOrUnrankedMemRef:$base, Variadic<I32>:$sizes);
+  let arguments = (ins AnyRankedOrUnrankedMemRef:$base, Variadic<I32>:$sizes, UnitAttr:$disableL2Cache);
   let results = (outs GlobalTensor:$result);
   let assemblyFormat = "$base `(` $sizes `)` attr-dict `:` qualified(type($base)) `,` qualified(type($result))";
   let hasVerifier = 1;
@@ -52,10 +52,12 @@ def DimOp : AscTile_Op<"dim", [Pure]> {
 
 def CopyOp : AscTile_Op<"copy", [AllElementTypesMatch<["base", "result"]>]> {
   let summary = "Copy from a tensor into a new sub-tensor";
-  let arguments = (ins NumericLocalTensor:$base, Variadic<I32>:$offsets);
+  let arguments = (ins NumericLocalTensor:$base, Variadic<I32>:$offsets,
+                   OptionalAttr<AscTile_DistribModeAttr>:$distrib);
   let results = (outs NumericLocalTensor:$result);
   let assemblyFormat = "$base `[` $offsets `]` attr-dict `:` qualified(type($base)) `,` qualified(type($result))";
   let hasCanonicalizeMethod = 1;
+  let hasVerifier = 1;
 }
 
 def LoadOp : AscTile_Op<"load", [AttrSizedOperandSegments, AllElementTypesMatch<["base", "result"]>,
@@ -165,14 +167,15 @@ def CmpSOp : AscTile_Op<"cmps", [Pure, ShapedMatchElemType<"base", "value">, Typ
   let assemblyFormat = "$cmpMode $base `,` $value attr-dict `:` qualified(type($base))";
 }
 
-def ReluOp : AscTile_Op<"relu", [Pure, AllTypesMatch<["operand", "result"]>]> {
+def ReluOp : AscTile_Op<"relu", [Elementwise, Pure, AllTypesMatch<["operand", "result"]>]> {
   let summary = "Compute element-wise ReLU value of tensor";
   let arguments = (ins NumericLocalTensor:$operand);
   let results = (outs NumericLocalTensor:$result);
   let assemblyFormat = "$operand attr-dict `:` qualified(type($result))";
 }
 
-def CastOp : AscTile_Op<"cast", [Pure, SameOperandsAndResultShape, DeclareOpInterfaceMethods<CastOpInterface>]> {
+def CastOp : AscTile_Op<"cast", [Elementwise, Pure, SameOperandsAndResultShape,
+  DeclareOpInterfaceMethods<CastOpInterface>]> {
   let summary = "Cast tensor elements to other data type";
   let arguments = (ins NumericLocalTensor:$in, AscTile_RoundModeAttr:$roundMode);
   let results = (outs NumericLocalTensor:$out);
@@ -283,7 +286,8 @@ def StoreFixpipeOp : AscTile_Op<"store_fixpipe", [AttrSizedOperandSegments, Memo
 
 def CopyFixpipeOp : AscTile_Op<"copy_fixpipe"> {
   let summary = "Store a tensor into a sub-tensor via FixPipe";
-  let arguments = (ins NumericLocalTensor:$base, Variadic<I32>:$offsets, UnitAttr:$relu, UnitAttr:$quantize);
+  let arguments = (ins NumericLocalTensor:$base, Variadic<I32>:$offsets, UnitAttr:$relu, UnitAttr:$quantize,
+                   OptionalAttr<AscTile_DistribModeAttr>:$distrib);
   let results = (outs NumericLocalTensor:$result);
   let assemblyFormat = "$base `[` $offsets `]` attr-dict `:` qualified(type($base)) `,` qualified(type($result))";
   let hasVerifier = 1;
@@ -298,6 +302,11 @@ def TransposeOp : AscTile_Op<"transpose", [Pure, SameOperandsAndResultElementTyp
   let hasVerifier = 1;
 }
 
+def InlineOp : AscTile_Op<"inline"> {
+  let arguments = (ins StrAttr:$value, Variadic<AnyType>:$args);
+  let assemblyFormat = "$value ($args^ `:` type($args))? attr-dict";
+}
+
 def InlineVFOp : AscTile_Op<"inline_vf", [Pure]> {
   let summary = "Declare vector function provided as C++ code";
   let arguments = (ins Variadic<NumericLocalTensor>:$inputs, StrAttr:$code);
@@ -305,7 +314,7 @@ def InlineVFOp : AscTile_Op<"inline_vf", [Pure]> {
   let assemblyFormat = "`(` $inputs `)` $code attr-dict `:` functional-type($inputs, results)";
 }
 
-def BitwiseNotOp : AscTile_Op<"bitwise_not", [Pure, AllTypesMatch<["operand", "result"]>]> {
+def BitwiseNotOp : AscTile_Op<"bitwise_not", [Elementwise, Pure, AllTypesMatch<["operand", "result"]>]> {
   let summary = "Compute the bitwise NOT of a tensor";
   let arguments = (ins IntLocalTensor:$operand);
   let results = (outs IntLocalTensor:$result);
@@ -337,7 +346,7 @@ def ScatterOp : AscTile_Op<"scatter", [AllElementTypesMatch<["dst", "src"]>, Att
   }];
 }
 
-def PowerOp : AscTile_Op<"power", [Pure, AllTypesMatch<["lhs", "rhs", "result"]>]> {
+def PowerOp : AscTile_Op<"power", [Elementwise, Pure, AllTypesMatch<["lhs", "rhs", "result"]>]> {
   let summary = "Compute one tensor to the power of other tensor";
   let arguments = (ins NumericLocalTensor:$lhs, NumericLocalTensor:$rhs);
   let results = (outs NumericLocalTensor:$result);
@@ -356,6 +365,16 @@ def DumpTensorOp : AscTile_Op<"dump_tensor"> {
   let summary = "Print all the information of the tensor";
   let arguments = (ins AscTile_AnyTensor:$tensor);
   let assemblyFormat = "$tensor attr-dict `:` type($tensor)";
+}
+
+def CVStrategyOp : AscTile_Op<"cv_strategy", [SingleBlockImplicitTerminator<"YieldOp">]> {
+  let summary = "Declare CV ratio-based strategy for wrapped operations";
+  let arguments = (ins AscTile_DistribModeAttr:$split);
+  let results = (outs Variadic<AnyType>:$results);
+  let regions = (region SizedRegion<1>:$region);
+  let assemblyFormat = "$split (`->` type($results)^)? $region attr-dict";
+  let hasCanonicalizer = 1;
+  let hasVerifier = 1;
 }
 
 #endif // ASCTILE_OPS_TD

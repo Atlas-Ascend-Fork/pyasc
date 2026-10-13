@@ -36,6 +36,7 @@
 
 #include "asctile/Dialect/AscendC/Transforms/Passes.h"
 #include "asctile/Dialect/AscendC/Utils/Attributes.h"
+#include "asctile/Dialect/AscendC/Utils/Utils.h"
 
 #include "ascir/Dialect/Asc/IR/Asc.h"
 #include "ascir/Dialect/Asc/Utils/Utils.h"
@@ -70,10 +71,181 @@ using ColorMap = std::unordered_map<TensorOp, Color, PointerLikeTypeHash<TensorO
 using ColorSet = std::unordered_set<Color>;
 using TensorSet = std::unordered_set<TensorOp, PointerLikeTypeHash<TensorOp>>;
 
-struct LifetimeInfo {
-    Operation* endLife = nullptr;
-    Operation* beginLife = nullptr;
+class LifetimeInfo {
+    TensorOp tensor;
+    OpOperand* firstUse = nullptr;
+    OpOperand* lastUse = nullptr;
+    Operation* beginLifeOp = nullptr;
+    Operation* endLifeOp = nullptr;
+    DominanceInfo* di;
+
+    // Examples:
+    // common uses:
+    // {
+    //  write(a) <- first use       ┐
+    //  ...                         | lifetime
+    //  read(a) <- last use         ┘
+    // }
+    //
+    // for-op yield value uses:
+    // b = for(...) {             ┐
+    //   ...                      |
+    //   write(a) <- first use    |
+    //   ...                      |
+    //   read(a)                  | lifetime (because recursive effect memory)
+    //   ...                      |
+    //   yield a                  |
+    // }                          |
+    // ...                        |
+    // read(b) <- last use        ┘
+    OpOperand* findFirstUse(ArrayRef<OpOperand*> uses) const
+    {
+        OpOperand* operand = uses.front();
+        if (auto forOp = dyn_cast<scf::ForOp>(operand->getOwner())) {
+            // A case when a first use of a tensor is setting of yielded value of a for-loop.
+            // In this case the tensor leaves from this setting operation till the end of the loop
+            // and it's first use was selected as init value for corresponding iteration argument
+            // of the loop.
+            for (auto* use : uses) {
+                Operation* user = use->getOwner();
+                auto parentForOp = user->getParentOfType<scf::ForOp>();
+                if (parentForOp == forOp && isWriteToAllocation(user, tensor))
+                    return use;
+            }
+        }
+        return operand;
+    }
+
+    // Examples:
+    // simple lifetime:
+    // {
+    //  write(a) <- first use       ┐
+    // ...                          | lifetime
+    //  read(a) <- last use         ┘
+    // }
+    // nested recursive lifetime:
+    // write(a) <- first use      ┐
+    // for(...) {                 |
+    //   read(a) <- last use      | lifetime (because recursive effect memory)
+    //   ...                      |
+    //   yield                    ┘
+    // }
+    Operation* findEndLifeOp() const
+    {
+        if (!getBeginLifeOp() || !lastUse)
+            return nullptr;
+
+        auto* lastOp = lastUse->getOwner();
+        Block* commonBlock = di->findNearestCommonDominator(getBeginLifeOp()->getBlock(), lastOp->getBlock());
+
+        Operation* lastUseParentOp;
+        if (auto blockArg = llvm::dyn_cast<BlockArgument>(lastUse->get()))
+            lastUseParentOp = blockArg.getOwner()->getParentOp();
+
+        auto process = [&](Operation* op) {
+            if (auto forOp = dyn_cast<scf::ForOp>(op)) {
+                if (lastUseParentOp != forOp)
+                    lastOp = forOp.getBody()->getTerminator();
+            } else if (auto whileOp = dyn_cast<scf::WhileOp>(op))
+                lastOp = whileOp.getBody()->getTerminator();
+        };
+
+        auto* op = lastOp;
+        process(op);
+        while (op->getBlock() != commonBlock) {
+            op = op->getParentOp();
+            process(op);
+        }
+        return lastOp;
+    }
+
+    // Special case when current tensor is last used as initial value for a for-loop op
+    // and other tensor is used as yielded value in the same for-loop op, i.e. it is a
+    // setting value for the loop's iteration argument after first iteration.
+    // In this case init value buffer may be reused for yielded value.
+    bool isLastUseInitValueFor(const LifetimeInfo& lti) const
+    {
+        auto blockArg = llvm::dyn_cast<BlockArgument>(lastUse->get());
+        bool noUseAfterTheLoop = lastUse->getOwner() == getEndLifeOp();
+        bool isOtherTensorYielded = lti.firstUse->getOwner() != lti.getBeginLifeOp();
+        return blockArg && noUseAfterTheLoop && isOtherTensorYielded &&
+               blockArg.getOwner()->getParentOp() == lti.getBeginLifeOp();
+    }
+
+public:
+    LifetimeInfo(TensorOp tensorOp, DominanceInfo& dinfo) : tensor(tensorOp), di(&dinfo)
+    {
+        SmallVector<OpOperand*> uses = collectAllUses(tensor);
+        llvm::stable_sort(uses, [&](OpOperand* lhso, OpOperand* rhso) {
+            return ascendc::opPrecedes(lhso->getOwner(), rhso->getOwner(), *di);
+        });
+        beginLifeOp = uses.front()->getOwner();
+        firstUse = findFirstUse(uses);
+        lastUse = uses.back();
+        endLifeOp = findEndLifeOp();
+    }
+
+    TensorOp getTensorOp() const { return tensor; }
+    Operation* getBeginLifeOp() const { return beginLifeOp; }
+    Operation* getEndLifeOp() const { return endLifeOp; }
+
+    bool comesAfter(const LifetimeInfo& lti) const
+    {
+        return ascendc::opPrecedes(lti.getBeginLifeOp(), getBeginLifeOp(), *di);
+    }
+
+    bool diesAfter(const LifetimeInfo& lti) const
+    {
+        return ascendc::opPrecedes(lti.getEndLifeOp(), getEndLifeOp(), *di);
+    }
+
+    bool livesAfter(const LifetimeInfo& lti) const
+    {
+        if (lti.isLastUseInitValueFor(*this))
+            return ascendc::opPrecedes(lti.lastUse->getOwner(), firstUse->getOwner(), *di);
+        return ascendc::opPrecedes(lti.getEndLifeOp(), getBeginLifeOp(), *di);
+    }
+
+    Operation* getEndBorderOp(const LifetimeInfo& lti) const
+    {
+        if (isLastUseInitValueFor(lti))
+            return lastUse->getOwner() == lti.firstUse->getOwner() ? lastUse->getOwner() : nullptr;
+        return getEndLifeOp() == lti.getBeginLifeOp() ? getEndLifeOp() : nullptr;
+    }
+
+    bool intersect(const LifetimeInfo& lti) const
+    {
+        return !getEndBorderOp(lti) && !lti.getEndBorderOp(*this) && !livesAfter(lti) && !lti.livesAfter(*this);
+    }
+
+    void dump() const
+    {
+        llvm::dbgs() << "tensor: ";
+        getTensorOp()->dump();
+        llvm::dbgs() << "beginLife: ";
+        if (getBeginLifeOp())
+            getBeginLifeOp()->dump();
+        else
+            llvm::dbgs() << "-";
+        llvm::dbgs() << "firstUse: ";
+        if (firstUse && firstUse->getOwner())
+            firstUse->getOwner()->dump();
+        else
+            llvm::dbgs() << "-";
+        llvm::dbgs() << "lastUse: ";
+        if (lastUse && lastUse->getOwner())
+            lastUse->getOwner()->dump();
+        else
+            llvm::dbgs() << "-";
+        llvm::dbgs() << "endLife: ";
+        if (getEndLifeOp())
+            getEndLifeOp()->dump();
+        else
+            llvm::dbgs() << "-";
+    }
 };
+
+using TensorLifeTimes = SmallVector<LifetimeInfo>;
 
 // Returns the actual allocation size matching AllocateTensor's sizing rules:
 // cube-block-aligned for A1/A2/B2, raw byte size for VECCALC/CO1.
@@ -126,59 +298,6 @@ std::optional<int64_t> getReuseGroup(Operation* op)
 
 void markForErase(TensorOp op) { op->setAttr(eraseMeAttr, UnitAttr::get(op.getContext())); }
 
-// Examples:
-// simple lifetime:
-// {
-//  write(a) <- first use       ┐
-// ...                          | lifetime
-//  read(a) <- last use         ┘
-// }
-// nested recursive lifetime:
-// write(a) <- first use      ┐
-// for(...) {                 |
-//   read(a) <- last use      | lifetime (because recursive effect memory)
-//   ...                      |
-//   yield                    ┘
-// }
-void adjustLifetime(Operation*& firstOp, Operation*& lastOp, DominanceInfo& di)
-{
-    auto* commonBlock = di.findNearestCommonDominator(firstOp->getBlock(), lastOp->getBlock());
-    Block* stopBlock = commonBlock;
-    Operation* op = lastOp;
-
-    auto process = [&](Operation* op) {
-        if (auto forOp = dyn_cast<scf::ForOp>(op))
-            lastOp = forOp.getBody()->getTerminator();
-        if (auto whileOp = dyn_cast<scf::WhileOp>(op))
-            lastOp = whileOp.getBody()->getTerminator();
-    };
-
-    process(op);
-    while (op->getBlock() != stopBlock) {
-        op = op->getParentOp();
-        process(op);
-    }
-}
-
-LifetimeInfo computeLifetimeInfo(TensorOp tensorOp, DominanceInfo& di)
-{
-    LifetimeInfo info;
-    SmallVector<Operation*> users = collectAllUsers(tensorOp);
-    TensorOp root = ascendc::getAllocationRoot(tensorOp.getResult());
-    llvm::stable_sort(users, [&](Operation* lhs, Operation* rhs) { return ascendc::opPrecedes(lhs, rhs, di); });
-    info.beginLife = users.front();
-    info.endLife = users.back();
-    adjustLifetime(info.beginLife, info.endLife, di);
-    return info;
-}
-
-bool intersectLifetime(const LifetimeInfo& lhs, const LifetimeInfo& rhs, DominanceInfo& di)
-{
-    bool f0 = ascendc::opPrecedes(rhs.beginLife, lhs.endLife, di);
-    bool f1 = ascendc::opPrecedes(lhs.beginLife, rhs.endLife, di);
-    return f0 && f1;
-}
-
 bool hasShareLoopAncestor(Operation* lhs, Operation* rhs)
 {
     constexpr int nestedLevel = 2;
@@ -199,75 +318,73 @@ bool hasShareLoopAncestor(Operation* lhs, Operation* rhs)
     return !results.empty();
 }
 
-bool isReadToAllocation(Operation* op, TensorOp root)
+bool isReadFromAllocation(Operation* op, TensorOp root)
 {
-    if (auto srcOp = dyn_cast<ascendc::OpWithSrc>(op)) {
+    if (auto srcOp = dyn_cast<ascendc::OpWithSrc>(op))
         for (Value src : srcOp.getSrcTensors()) {
+            if (auto blockArg = llvm::dyn_cast<BlockArgument>(src))
+                if (auto forOp = dyn_cast<scf::ForOp>(blockArg.getOwner()->getParentOp()))
+                    src = forOp.getInitArgs()[blockArg.getArgNumber() - 1];
             auto srcRoot = ascendc::getAllocationRoot(src);
             if (srcRoot && srcRoot == root)
                 return true;
         }
-    }
     return false;
 }
 
-bool canReuse(TensorOp top, TensorOp bottom, DominanceInfo& di, const TensorSet& crossGroup)
+bool canReuse(const LifetimeInfo& topTensorLTI, const LifetimeInfo& bottomTensorLTI)
 {
-    if (crossGroup.count(top) || crossGroup.count(bottom)) {
-        LLVM_DEBUG(llvm::dbgs() << "  reject: cross-group transfer tensor\n");
-        return false;
-    }
-    // On-the-fly computation avoids stale data from prior reuses.
-    LifetimeInfo topInfo = computeLifetimeInfo(top, di);
-    LifetimeInfo bottomInfo = computeLifetimeInfo(bottom, di);
-    if (ascendc::opPrecedes(bottomInfo.beginLife, topInfo.beginLife, di) ||
-        (topInfo.beginLife == bottomInfo.beginLife) && ascendc::opPrecedes(bottomInfo.endLife, topInfo.endLife, di)) {
-        std::swap(top, bottom);
+    LLVM_DEBUG(llvm::dbgs() << "Can reuse?: " << bottomTensorLTI.getTensorOp() << "\n");
+    const auto* topInfo = &topTensorLTI;
+    const auto* bottomInfo = &bottomTensorLTI;
+    if (topTensorLTI.comesAfter(bottomTensorLTI) ||
+        !bottomTensorLTI.comesAfter(topTensorLTI) && topTensorLTI.diesAfter(bottomTensorLTI)) {
         std::swap(topInfo, bottomInfo);
     }
+    TensorOp top = topInfo->getTensorOp();
+    TensorOp bottom = bottomInfo->getTensorOp();
     bool isTopInOut = top.getInput() || top.getOutput();
     auto iter1 = getReuseGroup(top);
     bool isBottomInOut = bottom.getInput() || bottom.getOutput();
     auto iter2 = getReuseGroup(bottom);
-    if (hasShareLoopAncestor(topInfo.beginLife, bottomInfo.beginLife) &&
+    if (hasShareLoopAncestor(topInfo->getBeginLifeOp(), bottomInfo->getBeginLifeOp()) &&
         (iter1 && iter2 && iter1 != iter2 && (isTopInOut || isBottomInOut))) {
         LLVM_DEBUG(llvm::dbgs() << "reject: in or out" << "\n");
         return false;
     }
-    // Strict intersection without intersect borders
-    bool flag = intersectLifetime(topInfo, bottomInfo, di);
-    if (flag) {
-        LLVM_DEBUG(llvm::dbgs() << "  reject: strict lifetime overlap\n");
-        return false;
-    }
-    if (topInfo.endLife == bottomInfo.beginLife) {
+    if (auto* borderOp = topInfo->getEndBorderOp(*bottomInfo)) {
         if (top.getType().getElementType() != bottom.getType().getElementType()) {
             LLVM_DEBUG(llvm::dbgs() << "  reject: same-op element type mismatch\n");
             return false;
         }
-        if (!(isReadToAllocation(topInfo.endLife, top) && isWriteToAllocation(topInfo.endLife, bottom))) {
+        if (!(isReadFromAllocation(borderOp, top) && isWriteToAllocation(borderOp, bottom))) {
             LLVM_DEBUG(llvm::dbgs() << "  reject: invalid read-write dependency\n");
             return false;
         }
         // Only allow same-op reuse for operations marked with OpWithReusableSrc.
         // Operations like BroadcastOp that read sources multiple times are not marked
         // and will be rejected here.
-        if (!isa<ascendc::OpWithReusableSrc>(topInfo.endLife)) {
+        if (!isa<ascendc::OpWithReusableSrc>(borderOp)) {
             LLVM_DEBUG(llvm::dbgs() << "  reject: operation not marked with OpWithReusableSrcInterface\n");
             return false;
         }
     }
+    // Strict intersection without intersect borders
+    if (topInfo->intersect(*bottomInfo)) {
+        LLVM_DEBUG(llvm::dbgs() << "  reject: strict lifetime overlap\n");
+        return false;
+    }
     return true;
 }
 
-auto getConflictedTensors(ArrayRef<TensorOp> allTensors, TensorOp op, DominanceInfo& di, const TensorSet& crossGroup)
+auto getConflictedTensors(const LifetimeInfo& tensorLTI, ArrayRef<LifetimeInfo>& tensorsLifeTimes)
 {
     SmallVector<TensorOp> conflicted;
-    for (auto tensor : allTensors) {
-        if (tensor == op)
-            continue;
-        if (!canReuse(op, tensor, di, crossGroup))
-            conflicted.emplace_back(tensor);
+    TensorOp tensor = tensorLTI.getTensorOp();
+    for (const auto& otherTensorLTI : tensorsLifeTimes) {
+        TensorOp otherTensor = otherTensorLTI.getTensorOp();
+        if (tensor != otherTensor && !canReuse(tensorLTI, otherTensorLTI))
+            conflicted.emplace_back(otherTensor);
     }
     return conflicted;
 };
@@ -291,17 +408,14 @@ Color getFirstFree(const ColorSet& colors)
     return freeColor;
 }
 
-void processTensorList(
-    ArrayRef<TensorOp> allTensors, SmallVectorImpl<TensorOp>& tensorList, DominanceInfo& di,
-    const TensorSet& crossGroup)
+void processTensorList(ArrayRef<LifetimeInfo> tensorsLifeTimes, DominanceInfo& di)
 {
     ColorMap colors;
-    LLVM_DEBUG(llvm::dbgs() << "Processing tensor list with " << tensorList.size() << " tensors\n");
-    while (!tensorList.empty()) {
-        TensorOp topTensor = tensorList.pop_back_val();
-        LLVM_DEBUG(llvm::dbgs() << "Trying coloring: " << topTensor << "\n");
-        Color freeColor =
-            getFirstFree(getColorsSet(colors, getConflictedTensors(allTensors, topTensor, di, crossGroup)));
+    LLVM_DEBUG(llvm::dbgs() << "Processing tensor list with " << tensorsLifeTimes.size() << " tensors\n");
+    for (const auto& tensorLTI : tensorsLifeTimes) {
+        TensorOp topTensor = tensorLTI.getTensorOp();
+        LLVM_DEBUG(llvm::dbgs() << "Trying to color: " << topTensor << "\n");
+        Color freeColor = getFirstFree(getColorsSet(colors, getConflictedTensors(tensorLTI, tensorsLifeTimes)));
         LLVM_DEBUG(llvm::dbgs() << "Set Color: " << freeColor << "\n");
         colors.insert({topTensor, freeColor});
     }
@@ -351,43 +465,40 @@ struct ReuseTensorAllocationPass : public ascendc::impl::ReuseTensorAllocationBa
     void runOnOperation() override
     {
         func::FuncOp funcOp = getOperation();
-
         DominanceInfo di(funcOp);
+
+        std::map<ascendc::TPosition, TensorLifeTimes> tensorsByPos;
         TensorSet crossGroup = collectCrossGroupTensors(funcOp);
-        SmallVector<TensorOp> allTensors;
-        std::map<TensorOp, LifetimeInfo> lifetimeInfoMap;
         funcOp.walk<WalkOrder::PreOrder>([&](TensorOp tensor) {
-            if (tensor->getUsers().empty() || !isReusable(tensor))
+            if (crossGroup.count(tensor)) {
+                LLVM_DEBUG(llvm::dbgs() << "tensor: ");
+                LLVM_DEBUG(tensor->dump());
+                LLVM_DEBUG(llvm::dbgs() << "  reject: cross-group transfer tensor\n");
                 return;
-            lifetimeInfoMap[tensor] = computeLifetimeInfo(tensor, di);
-            allTensors.push_back(tensor);
+            }
+            if (!tensor->getUsers().empty() && isReusable(tensor))
+                tensorsByPos[tensor.getPosition()].emplace_back(tensor, di);
         });
 
-        llvm::stable_sort(allTensors, [&](TensorOp lhs, TensorOp rhs) {
-            auto lhsSize = getAllocationSize(lhs);
-            auto rhsSize = getAllocationSize(rhs);
-            if (lhsSize != rhsSize)
-                return lhsSize > rhsSize;
-            Operation* lhsFreed = lifetimeInfoMap[lhs].endLife;
-            Operation* rhsFreed = lifetimeInfoMap[rhs].endLife;
-            return ascendc::opPrecedes(rhsFreed, lhsFreed, di);
-        });
+        for (auto& [position, tensorLifeTimes] : tensorsByPos) {
+            // Tensors are sorted in bigger first order to exclude situations like one of two non-intersecting big
+            // tensors are colored differently when only one of them intersects with small tensor and small tensor
+            // is colored before both big ones.
+            // Second sorting criteria is not significant and is used only for stable sorting.
+            llvm::stable_sort(tensorLifeTimes, [&](const LifetimeInfo& lhs, const LifetimeInfo& rhs) {
+                auto lhsSize = getAllocationSize(lhs.getTensorOp());
+                auto rhsSize = getAllocationSize(rhs.getTensorOp());
+                if (lhsSize != rhsSize)
+                    return lhsSize > rhsSize;
+                return lhs.diesAfter(rhs);
+            });
 
-        std::map<ascendc::TPosition, SmallVector<TensorOp>> filtered;
-        LLVM_DEBUG(llvm::dbgs() << "Lifetimes:\n");
-        for (auto tensor : allTensors) {
-            LLVM_DEBUG(llvm::dbgs() << "tensor: ");
-            LLVM_DEBUG(tensor->dump());
-            LLVM_DEBUG(llvm::dbgs() << "beginLife: ");
-            LLVM_DEBUG(lifetimeInfoMap[tensor].beginLife->dump());
-            LLVM_DEBUG(llvm::dbgs() << "endLife: ");
-            LLVM_DEBUG(lifetimeInfoMap[tensor].endLife->dump());
-            filtered[tensor.getPosition()].push_back(tensor);
-        }
-        for (auto& [position, tensors] : filtered) {
-            std::reverse(tensors.begin(), tensors.end());
-            auto order = tensors;
-            processTensorList(tensors, order, di, crossGroup);
+            LLVM_DEBUG(llvm::dbgs() << "Lifetimes:\n");
+            for (auto& lt : tensorLifeTimes) {
+                LLVM_DEBUG(lt.dump());
+            }
+
+            processTensorList(tensorLifeTimes, di);
         }
         funcOp.walk([](TensorOp op) {
             if (op->hasAttr(eraseMeAttr))

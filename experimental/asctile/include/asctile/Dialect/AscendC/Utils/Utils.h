@@ -19,6 +19,8 @@
 namespace mlir {
 namespace ascendc {
 
+SmallVector<OpOperand*> collectAllUses(ascendc::LocalTensorAutoOp tensorOp);
+
 Pipe getOpPipeExt(Operation* op, Pipe defaultPipe = Pipe::PIPE_S);
 
 } // namespace ascendc

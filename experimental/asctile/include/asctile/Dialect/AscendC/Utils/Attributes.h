@@ -19,6 +19,8 @@ namespace attr {
 LITERAL bufId = "ascendc.buf_id";
 LITERAL bufIds = "ascendc.buf_ids";
 LITERAL calCountSet = "asc.cal_count_set";
+LITERAL crossCoreFlagId = "ascendc.cross_core_flag_id";
+LITERAL cvRatio = "ascendc.cv_ratio";
 LITERAL maskSet = "asc.mask_set";
 LITERAL reuseGroup = "asc.reuse_group";
 LITERAL staticAlloc = "asc.static_alloc";

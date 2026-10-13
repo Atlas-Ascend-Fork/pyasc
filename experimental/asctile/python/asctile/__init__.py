@@ -95,21 +95,29 @@ from .language.creation_ops import (
 from .language.debug_ops import (
     device_assert,
     device_print,
-    inline,
-    inline_vf,
     static_assert,
     static_print,
 )
 from .language.memory_ops import (
+    DistribMode,
     copy,
     copy_in,
     copy_out,
     gather,
     scatter,
 )
+from .language.low_level_ops import (
+    empty,
+    empty_like,
+    from_asc,
+    inline,
+    inline_vf,
+    to_asc,
+)
 from .language.prog_model_ops import (
     block_idx,
     block_num,
+    cv_strategy,
     sub_block_idx,
     sub_block_num,
 )
@@ -210,19 +218,26 @@ __all__ += [
     # .language.debug_ops
     "device_assert",
     "device_print",
-    "inline",
-    "inline_vf",
     "static_assert",
     "static_print",
     # .language.memory_ops
+    "DistribMode",
     "copy",
     "copy_in",
     "copy_out",
     "gather",
     "scatter",
+    # .language.low_level_ops
+    "empty",
+    "empty_like",
+    "from_asc",
+    "inline",
+    "inline_vf",
+    "to_asc",
     # .language.prog_model_ops
     "block_idx",
     "block_num",
+    "cv_strategy",
     "sub_block_idx",
     "sub_block_num",
     # .language.shape_ops

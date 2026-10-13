@@ -15,7 +15,7 @@ def test_T(jit_test, mock_launch, zero_tile):
     def kernel():
         x = zero_tile([32, 64], asctile.float32)
         result = x.T
-        assert result.shape == (64, 32)
+        asctile.static_assert(result.shape == (64, 32))
 
     kernel[1]()
     assert mock_launch.call_count == 1
@@ -28,7 +28,7 @@ def test_floordiv(jit_test, mock_launch, zero_tile):
         x = zero_tile([128], asctile.float32)
         y = zero_tile([128], asctile.float32)
         result = x // y
-        assert result.shape == (128, )
+        asctile.static_assert(result.shape == (128, ))
 
     kernel[1]()
     assert mock_launch.call_count == 1
@@ -40,7 +40,7 @@ def test_rfloordiv(jit_test, mock_launch, zero_tile):
     def kernel():
         x = zero_tile([128], asctile.float32)
         result = 2.0 // x
-        assert result.shape == (128, )
+        asctile.static_assert(result.shape == (128, ))
 
     kernel[1]()
     assert mock_launch.call_count == 1
@@ -52,7 +52,7 @@ def test_pos(jit_test, mock_launch, zero_tile):
     def kernel():
         x = zero_tile([128], asctile.float32)
         result = +x
-        assert result.shape == (128, )
+        asctile.static_assert(result.shape == (128, ))
 
     kernel[1]()
     assert mock_launch.call_count == 1
@@ -64,7 +64,7 @@ def test_abs(jit_test, mock_launch, zero_tile):
     def kernel():
         x = zero_tile([128], asctile.float32)
         result = x.abs()
-        assert result.shape == (128, )
+        asctile.static_assert(result.shape == (128, ))
 
     kernel[1]()
     assert mock_launch.call_count == 1
@@ -75,7 +75,7 @@ def test_ceildiv(jit_test, mock_launch):
     @jit_test
     def kernel():
         result = asctile.ceildiv(7, 3)
-        assert result == 3
+        asctile.static_assert(result == 3)
 
     kernel[1]()
     assert mock_launch.call_count == 1

@@ -49,6 +49,7 @@ void defineAscendCPasses(py::module& mod)
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_insert_bias_bufid_sync", createInsertBiasBufIdSyncPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_insert_bufid_sync", createInsertBufIdSyncPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_insert_cross_core_sync", createInsertCrossCoreSyncPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_insert_cross_core_sync_gm", createInsertCrossCoreSyncGMPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_insert_init_dump", createInsertInitDumpPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_insert_subblock_guard", createInsertSubBlockGuardPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_lower_to_l0", createLowerToL0Pass);
@@ -71,7 +72,9 @@ void defineAscTilePasses(py::module& mod)
     using namespace asctile;
     using namespace pybind11::literals;
     auto m = mod.def_submodule("asctile");
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_apply_cv_strategy", createApplyCVStrategyPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_apply_homomorphism", createApplyHomomorphismPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_combine_extract_slice", createCombineExtractSlicePass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_cube_transpose_to_load", createCubeTransposeToLoadPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_detect_bias_load", createDetectBiasLoadPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_fold_cast", createFoldCastPass);
@@ -81,6 +84,7 @@ void defineAscTilePasses(py::module& mod)
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_mark_matmul_acc_with_bias", createMarkMatmulAccWithBiasPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_mark_reuse_source", createMarkReuseSourcePass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_merge_cv_groups", createMergeCVGroupsPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_prepare_cv_strategy", createPrepareCVStrategyPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_promote_pure_operations", createPromotePureOpsPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_resolve_auto_location", createResolveAutoLocationPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_split_cube_load", createSplitCubeLoadPass);
@@ -111,6 +115,7 @@ void defineAscVFPasses(py::module& mod)
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_inline_vf_group", createInlineVFGroupPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_lower_to_reg", createLowerToRegPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_materialize_load_store", createMaterializeLoadStorePass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_promote_cast_ops", createPromoteCastOpsPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_reorder_ops_in_vec_scope", createReorderOpsInVecScopePass);
 }
 

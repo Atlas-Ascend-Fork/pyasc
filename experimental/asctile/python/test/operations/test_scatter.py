@@ -49,7 +49,6 @@ def test_scatter(data_count, index_count, index_range, read_count, row_len, offs
                  data_dtype, num_indices, require_c310):
     require_c310()
     input = torch.arange(data_count * row_len).to(data_dtype).reshape([data_count, row_len])
-    torch.manual_seed(0)
     index = torch.randint(0, index_range, size=(index_count, ), dtype=index_dtype)
     data = torch.arange(index_count * row_len).to(data_dtype).reshape([index_count, row_len])
 

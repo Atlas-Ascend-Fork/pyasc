@@ -12,7 +12,6 @@
 #define ASCIR_DIALECT_UTILS_CVGROUPCANONICALIZATION_H
 
 #include "mlir/IR/PatternMatch.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/STLExtras.h"
 
 namespace mlir {
@@ -39,11 +38,11 @@ struct EraseUnusedOperands : public OpRewritePattern<CVGroupOp> {
 
     LogicalResult matchAndRewrite(CVGroupOp op, PatternRewriter& rewriter) const override
     {
-        BitVector unusedOperands(op.getNumOperands());
+        BitVector unusedOperands(op->getNumOperands());
         Block* body = op.getBody();
-        for (unsigned i = 0; i < op.getNumOperands(); i++) {
+        for (unsigned i = 0; i < op->getNumOperands(); i++) {
             auto userInsideGroup = [op](Operation* user) { return op->isProperAncestor(user) && !isa<YieldOp>(user); };
-            if (llvm::none_of(op.getOperand(i).getUsers(), userInsideGroup))
+            if (llvm::none_of(op->getOperand(i).getUsers(), userInsideGroup))
                 unusedOperands.set(i);
         }
         if (unusedOperands.none())
@@ -82,11 +81,11 @@ struct EraseUnusedResults : public OpRewritePattern<CVGroupOp> {
         for (auto [kind, type] : llvm::zip_equal(results, op.getResultTypes()))
             if (kind == ResultKind::Used)
                 newTypes.push_back(type);
-        auto newOp = rewriter.create<CVGroupOp>(op.getLoc(), newTypes, op.getOperands());
+        auto newOp = rewriter.create<CVGroupOp>(op.getLoc(), newTypes, op->getOperands(), op->getAttrs());
         rewriter.inlineRegionBefore(op.getRegion(), newOp.getRegion(), newOp.getRegion().end());
         SmallVector<Value, 4> newYields, newResults;
         unsigned resultIdx = 0;
-        for (auto [kind, result, yield] : llvm::zip_equal(results, op.getResults(), yieldOp.getOperands())) {
+        for (auto [kind, result, yield] : llvm::zip_equal(results, op->getResults(), yieldOp.getOperands())) {
             if (kind == ResultKind::Used) {
                 newYields.push_back(yield);
                 newResults.push_back(newOp.getResult(resultIdx++));

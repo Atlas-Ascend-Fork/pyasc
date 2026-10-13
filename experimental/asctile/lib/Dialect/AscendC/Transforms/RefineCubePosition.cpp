@@ -9,6 +9,7 @@
  */
 
 #include "asctile/Dialect/AscendC/Transforms/Passes.h"
+#include "asctile/Dialect/AscendC/Utils/Utils.h"
 
 #include "ascir/Dialect/Asc/IR/Asc.h"
 #include "ascir/Dialect/Asc/Utils/Utils.h"
@@ -53,10 +54,10 @@ void refineCubePosition(ascendc::LocalTensorAutoOp tensor)
 {
     if (tensor.getPosition() != ascendc::TPosition::A1)
         return;
-    auto users = collectAllUsers(tensor);
+    auto uses = collectAllUses(tensor);
     std::unordered_set<ascendc::TPosition> possiblePositions;
-    for (auto* use : users) {
-        if (auto pos = getPossiblePosition(use))
+    for (auto* use : uses) {
+        if (auto pos = getPossiblePosition(use->getOwner()))
             possiblePositions.insert(pos.value());
     }
     if (auto it = possiblePositions.begin(); it != possiblePositions.end())

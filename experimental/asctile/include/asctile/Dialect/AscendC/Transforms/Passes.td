@@ -138,7 +138,7 @@ def FuseBufIdSync : Pass<"ascendc-fuse-bufid-sync", "func::FuncOp"> {
 def InsertBufIdSync : Pass<"ascendc-insert-bufid-sync", "func::FuncOp"> {
   let summary = "Insert get_buf/rls_buf synchronization around operations for BufId-based tracking on C310 arch";
   let constructor = "mlir::ascendc::createInsertBufIdSyncPass()";
-  let dependentDialects = ["ascendc::AscendCDialect"];
+  let dependentDialects = ["arith::ArithDialect", "ascendc::AscendCDialect"];
   let description = [{
     Inserts BufId synchronization for Ascend hardware with C310 architecture using buffer ID tracking:
     1. Assigns unique `bufId` to each tensor allocation (`LocalTensorV3Op`, `TBufGetTensorOp`)
@@ -175,86 +175,99 @@ def InsertBiasBufIdSync : Pass<"ascendc-insert-bias-bufid-sync", "func::FuncOp">
 def InsertCrossCoreSync : Pass<"ascendc-insert-cross-core-sync", "func::FuncOp"> {
   let summary = "Insert CrossCoreSetFlag and CrossCoreWaitFlag synchronization between if_aic and if_aiv operations";
   let constructor = "mlir::ascendc::createInsertCrossCoreSyncPass()";
-  let dependentDialects = ["ascendc::AscendCDialect"];
+  let dependentDialects = ["arith::ArithDialect", "ascendc::AscendCDialect"];
   let description = [{
     This pass inserts `ascendc.cross_core_set_flag` and `ascendc.cross_core_wait_flag` operations
-    to synchronize data transfers between AIV (AI Vector) and AIC (AI Cube) cores.
+    to synchronize data transfers between AIV (AI Vector) and AIC (AI Cube) cores. It is a no-op
+    unless the function contains at least two `if_aic`/`if_aiv` core groups.
 
     The pass identifies sync-trigger operations that transfer data between cores
     through an on-chip local tensor:
-    - `DataCopyOp` with direction VECCALC → A1/B1 (UB → L1, in AIV groups)
-    - `FixpipeOp` with direction CO1 → VECCALC (L0C → UB, in AIC groups)
-
-    `FixpipeOp` with direction CO1 → GM (L0C → GM) is NOT a sync trigger: its
-    destination is a GlobalTensor reached through `global_tensor.subindex` chains,
-    so it is handled by a dedicated FixPipe-to-GM phase described below.
+    - `DataCopyOp` with direction VECCALC -> A1/B1 (UB -> L1, in AIV groups)
+    - `FixpipeOp` with direction CO1 -> VECCALC (L0C -> UB, in AIC groups)
 
     For each sync-trigger op, the pass:
     1. Finds consumers of the trigger's destination tensor on the opposite core
        (only those appearing after the trigger in IR order, via function walk).
        If no consumers are found, no synchronization flags are inserted for this trigger.
-    2. Allocates a flag ID (sequential, starting from 0, wrapping at 16).
+    2. Allocates a flag ID (sequential, starting from 0 and wrapping at 16).
     3. Inserts a backward `CrossCoreWaitFlag` before the trigger if this is a second
        trigger for the same tensor (tensor reuse) or if inside a loop. This waits for
        the previous consumer's backward `CrossCoreSetFlag` (loop-carried dependency).
     4. Inserts a producer `CrossCoreSetFlag` after the trigger (forward direction),
-       using the trigger op's pipe. Signals "data is ready" to consumers.
+       using the trigger op's pipe, only when consumers exist. Signals "data is ready"
+       to consumers.
     5. Inserts consumer flags only in the **first** consumer group after the trigger
-       (cross-core flags are binary semaphores — one set, one wait):
-       - A `CrossCoreWaitFlag` before the first use: the consumer waits for the
-         producer's "data ready" signal from step 4.
-       - A `CrossCoreSetFlag` after the last use in the same group (backward direction):
+       (cross-core flags are binary semaphores -- one set, one wait):
+       - A `CrossCoreWaitFlag` at the start of the consumer group's body: the consumer
+         waits for the producer's "data ready" signal from step 4.
+       - A `CrossCoreSetFlag` before the consumer group's terminator (backward direction):
          the consumer signals that the buffer can be safely overwritten.
        Both use the consumer op's pipe (determined by `getOpPipeExt(consumerOp)`).
-       Consumer groups after the first receive no flags — they rely on intra-core
+       Consumer groups after the first receive no flags -- they rely on intra-core
        ordering, since the data is already loaded by the first group's wait.
-    6. If inside a loop (first trigger only), inserts backward synchronization to prevent
-       the producer from overwriting a shared buffer before the consumer finishes reading:
-       - An initial `CrossCoreSetFlag` before the loop (consumer's core, PIPE_S) —
+    6. Seeds backward synchronization to prevent the producer from overwriting a shared
+       buffer before the consumer finishes reading. This happens for a first trigger
+       inside a loop, or for a second trigger whose enclosing loop differs from the
+       one recorded previously:
+       - An initial `CrossCoreSetFlag` before the loop (consumer's core, PIPE_S) --
          seeds the backward flag to prevent first-iteration deadlock.
        - A finalization `CrossCoreWaitFlag` after the loop (producer's core, producer's
-         pipe) — consumes the leftover flag.
+         pipe) -- consumes the leftover flag.
 
     When the same destination tensor is reused by a different trigger op (second trigger),
     the pass recognizes it via a destination-to-flag map and reuses the same flag ID:
-    the second trigger's `CrossCoreSetFlag` re-sets the forward flag, allowing subsequent
-    consumers to wait on it. This avoids exhausting the 16-flag hardware limit.
+    the second trigger's `CrossCoreSetFlag` re-sets the forward flag (when it has
+    consumers), allowing subsequent consumers to wait on it. This avoids exhausting
+    the 16-flag hardware limit.
+  }];
+}
 
-    ### FixPipe-to-GM phase
+def InsertCrossCoreSyncGM : Pass<"ascendc-insert-cross-core-sync-gm", "func::FuncOp"> {
+  let summary = "Insert cross-core synchronization for CO1->GM and VECCALC->GM data transfers";
+  let constructor = "mlir::ascendc::createInsertCrossCoreSyncGMPass()";
+  let dependentDialects = ["arith::ArithDialect", "ascendc::AscendCDialect"];
+  let description = [{
+    This pass inserts `ascendc.cross_core_set_flag` and `ascendc.cross_core_wait_flag`
+    operations to synchronize data transfers from on-chip buffers to Global Memory (GM)
+    across AIC (producer) and AIV (consumer) cores. It handles two transfer types:
+    `FixpipeOp` from L0C (CO1) to GM, and `DataCopyOp` from UB (VECCALC) to GM.
 
-    FixPipe-to-GM transfers (`FixpipeOp` CO1 → GM) are synchronized by a separate phase,
-    independent of the sync-trigger mechanism above and of loop-carried forward/backward
-    sync. Walking the groups in pre-order, the pass:
+    GM transfers are synchronized independently of the sync-trigger mechanism handled by
+    `InsertCrossCoreSync` and of loop-carried forward/backward sync. Walking the
+    `if_aic`/`if_aiv` groups in pre-order, the pass:
 
-    - Producer (the AIC group containing the `fixpipe`): inserts two
-      `CrossCoreSetFlag` operations at the end of the group (before its terminator),
-      with flag ids `id` and `id + 16` on the fixpipe's pipe (`PIPE_FIX`), and records
-      the root GlobalTensor — traced back through `global_tensor.subindex` chains via
-      `getRootGlobalTensor` — paired with `id`.
+    - Producer (the group containing the GM-writing op): inserts `CrossCoreSetFlag`
+      operations at the end of the group (before its terminator), on the op's pipe
+      (determined by `getOpPipeExt`), and records the root GlobalTensor -- traced back
+      through `global_tensor.subindex` chains via `getRootGlobalTensor`:
+      - CO1 -> GM (`FixpipeOp`): inserts two flags with ids `id` and `id + 16`.
+      - VECCALC -> GM (`DataCopyOp`): inserts a single flag with id `id`.
+      Flags are only emitted when a subsequent consumer group exists (a later group
+      whose operand traces to the same root); otherwise the `CrossCoreSetFlag` and the
+      flag ID allocation are skipped, since no `CrossCoreWaitFlag` would ever consume
+      the flag.
     - Consumer (a later group whose operand traces, via `getRootGlobalTensor`, to a
-      recorded root): inserts a single `CrossCoreWaitFlag` with flag id `id` on `PIPE_S`,
-      placed before the group's `sync_all` barrier (`sync_all_soft`/`sync_all_hard`), or
-      at the start of the group body if no `sync_all` is present.
+      recorded root): inserts `CrossCoreWaitFlag` operations at the start of the group
+      body (before any group operation), on `PIPE_S`:
+      - For CO1 -> GM producers: waits on `id` only.
+      - For VECCALC -> GM producers: waits on both `id` and `id + 16`.
 
-    The producer emits a mirrored flag pair (`id` and `id + 16`) while the consumer
-    waits only on `id`. No loop-carried synchronization is inserted for the GM path.
+    The flag pair asymmetry between transfer types reflects the different pipeline
+    dependencies of each path. No loop-carried synchronization is inserted for the GM path.
 
-    The pipe for each flag operation is determined by `getOpPipeExt`:
-    - `mmad`, `mmad_with_bias` → `PIPE_M`
-    - `fixpipe` → `PIPE_FIX`
-    - `copy_to_l0` operations → `PIPE_MTE1`
-    - `fill` → `PIPE_MTE2`
-    - `data_copy` (GlobalToLocal) → `PIPE_MTE2`
-    - `data_copy` (LocalToGlobal or VECCALC→A1) → `PIPE_MTE3`
-    - `local_tensor.get_value`, `local_tensor.set_value` → `PIPE_S`
-    - All other operations → `PIPE_V`
+    Flag ID allocation starts from the value stored in the `ascendc.cross_core_flag_id`
+    attribute on the function (set by the preceding `InsertCrossCoreSync` pass, or 0
+    if absent) and wraps at 16 (`maxTensorId`); the `id + 16` values occupy the
+    upper flag bank (16-31). After processing, the pass removes the
+    `ascendc.cross_core_flag_id` attribute, as flag ID allocation is complete.
   }];
 }
 
 def InsertInitDump : Pass<"ascendc-insert-init-dump", "func::FuncOp"> {
   let summary = "Insert InitDump call and dump_addr kernel argument for kernels containing debug operations";
   let constructor = "mlir::ascendc::createInsertInitDumpPass()";
-  let dependentDialects = ["emitasc::EmitAscDialect", "arith::ArithDialect"];
+  let dependentDialects = ["arith::ArithDialect", "ascendc::AscendCDialect", "emitasc::EmitAscDialect"];
   let description = [{
     Inserts AscendC debug-dump initialization for kernels that use debug operations. Walks the function for
     `ascendc.printf` or `ascendc.dump_tensor`; if any are found, appends a `dump_addr` kernel argument

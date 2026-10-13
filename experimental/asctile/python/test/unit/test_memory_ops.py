@@ -252,6 +252,107 @@ class TestCopy:
         kernel[1]()
         assert mock_launch.call_count == 1
 
+    @pytest.mark.parametrize("distrib, expected_shape", (
+        (asctile.DistribMode.FullVec0, (32, 64)),
+        (asctile.DistribMode.FullVec1, (32, 64)),
+        (asctile.DistribMode.SplitByM, (16, 64)),
+        (asctile.DistribMode.SplitByN, (32, 32)),
+    ))
+    def test_with_distrib(self, jit_test, mock_launch, zero_tile, distrib, expected_shape):
+
+        @jit_test
+        def kernel():
+            src = zero_tile([32, 64], asctile.float32, asctile.TensorLocation.L0C)
+            result = asctile.copy(src, location=asctile.TensorLocation.UB, distrib=distrib)
+            asctile.static_assert(result.shape == expected_shape)
+
+        kernel[1]()
+        assert mock_launch.call_count == 1
+
+    def test_distrib_wrong_rank(self, jit_test, zero_tile):
+
+        @jit_test
+        def kernel():
+            src = zero_tile([32], asctile.float32, asctile.TensorLocation.L0C)
+            asctile.copy(src, location=asctile.TensorLocation.UB, distrib=asctile.DistribMode.SplitByM)
+
+        with pytest.raises(RuntimeError, match="2D"):
+            kernel[1]()
+
+    @pytest.mark.parametrize("distrib, wrong_shape", (
+        (asctile.DistribMode.SplitByM, (32, 64)),
+        (asctile.DistribMode.SplitByM, (16, 32)),
+        (asctile.DistribMode.SplitByN, (16, 32)),
+    ))
+    def test_distrib_wrong_shape(self, jit_test, zero_tile, distrib, wrong_shape):
+
+        @jit_test
+        def kernel():
+            src = zero_tile([32, 64], asctile.float32, asctile.TensorLocation.L0C)
+            asctile.copy(src, [0, 0], wrong_shape, asctile.TensorLocation.UB, distrib)
+
+        with pytest.raises(RuntimeError, match="split shape"):
+            kernel[1]()
+
+    @pytest.mark.parametrize("shape, distrib", (
+        ([31, 64], asctile.DistribMode.SplitByM),
+        ([32, 31], asctile.DistribMode.SplitByN),
+    ))
+    def test_distrib_unaligned_shape(self, jit_test, zero_tile, shape, distrib):
+
+        @jit_test
+        def kernel():
+            src = zero_tile(shape, asctile.float32, asctile.TensorLocation.L0C)
+            asctile.copy(src, location=asctile.TensorLocation.UB, distrib=distrib)
+
+        with pytest.raises(RuntimeError, match="multiple of"):
+            kernel[1]()
+
+    @pytest.mark.parametrize("distrib, expected_shape", (
+        (asctile.DistribMode.JoinByM, (32, 64)),
+        (asctile.DistribMode.JoinByN, (16, 128)),
+    ))
+    def test_with_join_distrib(self, jit_test, mock_launch, zero_tile, distrib, expected_shape):
+
+        @jit_test
+        def kernel():
+            src = zero_tile([16, 64], asctile.float32, asctile.TensorLocation.UB)
+            result = asctile.copy(src, location=asctile.TensorLocation.L1, distrib=distrib)
+            asctile.static_assert(result.shape == expected_shape)
+
+        kernel[1]()
+        assert mock_launch.call_count == 1
+
+    @pytest.mark.parametrize("distrib, expected_shape", (
+        (asctile.DistribMode.JoinByM, (32, 64)),
+        (asctile.DistribMode.JoinByN, (16, 128)),
+    ))
+    def test_join_distrib_explicit_shape(self, jit_test, mock_launch, zero_tile, distrib, expected_shape):
+
+        @jit_test
+        def kernel():
+            src = zero_tile([16, 64], asctile.float32, asctile.TensorLocation.UB)
+            result = asctile.copy(src, [0, 0], expected_shape, asctile.TensorLocation.L1, distrib)
+            asctile.static_assert(result.shape == expected_shape)
+
+        kernel[1]()
+        assert mock_launch.call_count == 1
+
+    @pytest.mark.parametrize("distrib, wrong_shape", (
+        (asctile.DistribMode.JoinByM, (16, 64)),
+        (asctile.DistribMode.JoinByN, (16, 64)),
+        (asctile.DistribMode.JoinByM, (64, 64)),
+    ))
+    def test_join_distrib_wrong_shape(self, jit_test, zero_tile, distrib, wrong_shape):
+
+        @jit_test
+        def kernel():
+            src = zero_tile([16, 64], asctile.float32, asctile.TensorLocation.UB)
+            asctile.copy(src, [0, 0], wrong_shape, asctile.TensorLocation.L1, distrib)
+
+        with pytest.raises(RuntimeError, match="joined shape"):
+            kernel[1]()
+
 
 class TestTo:
 

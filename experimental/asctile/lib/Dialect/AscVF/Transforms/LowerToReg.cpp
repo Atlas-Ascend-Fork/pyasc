@@ -46,7 +46,7 @@ SmallVector<int64_t> getStrides(ArrayRef<int64_t> shape)
 }
 
 struct VFInfo {
-    Value oneRepeatSize;
+    Value oneRepeatSize, vecLen;
     // contains strides for loop variables for linear access
     // Ex. addr = i * stride0 + j * stride1 + ... -> strides = [stride0, stride1, ...]
     SmallVector<int64_t> strides;
@@ -65,7 +65,7 @@ struct VFInfo {
         auto groupOp = op->getParentOfType<ascvf::VFGroupOp>();
         assert(groupOp && "emitasc.vec_scope op must be inside ascvf.vf_group op");
         auto builder = ImplicitLocOpBuilder::atBlockBegin(UnknownLoc::get(op.getContext()), op.getBody());
-        auto vecLen = createVecLen(builder, op);
+        vecLen = createVecLen(builder, op);
         ascendc::LocalTensorType groupType = cast<ascendc::LocalTensorType>(groupOp.getGroupType());
         elemType = getElementTypeOrSelf(groupType);
         Value sizeIndex = builder.create<arith::ConstantIndexOp>(ascendc::getTypeSize(elemType));
@@ -191,11 +191,8 @@ struct ConvertBinaryL2 : public ConvertOp<L2Op> {
         offset = adaptor.create<arith::AddIOp>(offset, mulOp);
         auto load1Op = adaptor.create<ascvf::LoadOp>(src0Reg, op.getSrc0(), offset, updateMask);
         auto load2Op = adaptor.create<ascvf::LoadOp>(src1Reg, op.getSrc1(), offset, updateMask);
-        setAlignmentAttr(load1Op);
-        setAlignmentAttr(load2Op);
         adaptor.create<RegOp>(dstReg, src0Reg, src1Reg, maskAll);
         auto storeOp = adaptor.create<ascvf::StoreOp>(op.getDst(), offset, dstReg, updateMask);
-        setAlignmentAttr(storeOp);
         adaptor->eraseOp(op);
         return success();
     }
@@ -222,10 +219,8 @@ struct ConvertUnaryL2 : public ConvertOp<L2Op> {
         Value updateMask = adaptor.updateMaskOp(calCount, vfInfo.elemType);
         offset = adaptor.createFMA(offset, loop.getInductionVar(), vfInfo.oneRepeatSize);
         auto loadOp = adaptor.create<ascvf::LoadOp>(srcReg, op.getSrc(), offset, updateMask);
-        setAlignmentAttr(loadOp);
         adaptor.create<RegOp>(dstReg, srcReg, maskAll);
         auto storeOp = adaptor.create<ascvf::StoreOp>(op.getDst(), offset, dstReg, updateMask);
-        setAlignmentAttr(storeOp);
         adaptor->eraseOp(op);
         return success();
     }
@@ -391,6 +386,79 @@ struct ConvertReduceSum : public ConvertOp<ascendc::ReduceSumOp> {
     }
 };
 
+struct ConvertCompareScalar : public ConvertOp<ascendc::CompareScalarL2Op> {
+    using ConvertOp<ascendc::CompareScalarL2Op>::ConvertOp;
+    using ConvertOp<ascendc::CompareScalarL2Op>::vfInfo;
+
+    LogicalResult matchAndRewrite(ascendc::CompareScalarL2Op op, RewriterAdaptor& adaptor) const override
+    {
+        ascir::ConstantOpBuilder consts(*adaptor);
+        const auto& dims = vfInfo.shape;
+        Value offset =
+            makeNestedLoop(ArrayRef<int64_t>{dims}.drop_back(), ArrayRef<int64_t>{vfInfo.strides}.drop_back(), adaptor);
+        auto srcReg = adaptor.createRegTensor(vfInfo.elemType);
+        auto dstReg = adaptor.create<ascendc::MaskRegOp>(ascendc::MaskRegType::get(op.getContext()));
+        auto scalarVal = op.getSrc1Scalar();
+        auto srcType = dyn_cast<ascendc::LocalTensorType>(op.getSrc0().getType());
+        auto dstType = dyn_cast<ascendc::LocalTensorType>(op.getDst().getType());
+        assert(srcType && "CompareScalarL2Op must have LocalTensorType");
+        auto calCount = consts.index(srcType.getNumElements());
+        Value repeatTimes = adaptor.create<arith::CeilDivSIOp>(adaptor->getIndexType(), calCount, vfInfo.oneRepeatSize);
+        Value sreg = adaptor.createUI32Variable(calCount);
+        auto loop = adaptor.create<emitasc::VFForOp>(repeatTimes);
+        adaptor->setInsertionPointToStart(loop.getBody());
+
+        Value updateMask = adaptor.updateMaskOp(sreg, vfInfo.elemType);
+        Value loadOffset = adaptor.createFMA(offset, loop.getInductionVar(), vfInfo.oneRepeatSize);
+        auto loadOp = adaptor.create<ascvf::LoadOp>(srcReg, op.getSrc0(), loadOffset, updateMask);
+        adaptor.create<ascendc::CompareScalarRegOp>(dstReg, srcReg, op.getSrc1Scalar(), updateMask, op.getCmpMode());
+
+        auto sizeOfElem = consts.index(vfInfo.elemType.getIntOrFloatBitWidth() / CHAR_BIT);
+        auto maskElemCount = adaptor.create<arith::DivSIOp>(vfInfo.vecLen, sizeOfElem);
+        auto dstStrideBytes = adaptor.create<arith::DivSIOp>(maskElemCount, consts.index(CHAR_BIT));
+        auto dstStrideInElemType = adaptor.create<arith::DivSIOp>(dstStrideBytes, sizeOfElem);
+        Value storeOffset = adaptor.createFMA(offset, loop.getInductionVar(), dstStrideBytes);
+        adaptor.create<ascvf::StoreOp>(op.getDst(), storeOffset, dstReg, updateMask);
+        adaptor->eraseOp(op);
+        return success();
+    }
+};
+
+struct ConvertSelectL2 : public ConvertOp<ascendc::SelectL2Op> {
+    using ConvertOp<ascendc::SelectL2Op>::ConvertOp;
+    using ConvertOp<ascendc::SelectL2Op>::vfInfo;
+
+    LogicalResult matchAndRewrite(ascendc::SelectL2Op op, RewriterAdaptor& adaptor) const override
+    {
+        ascir::ConstantOpBuilder consts(*adaptor);
+        const auto& dims = vfInfo.shape;
+        Value offset =
+            makeNestedLoop(ArrayRef<int64_t>{dims}.drop_back(), ArrayRef<int64_t>{vfInfo.strides}.drop_back(), adaptor);
+        auto [src0Reg, src1Reg, dstReg] = adaptor.createRegTensors<3>(vfInfo.elemType);
+        auto maskReg = adaptor.create<ascendc::MaskRegOp>(ascendc::MaskRegType::get(op.getContext()));
+        auto selReg = adaptor.createRegTensor(adaptor->getIntegerType(8, false));
+        auto countVal = consts.index(dims.back());
+        Value calCount = adaptor.createUI32Variable(countVal);
+        Value maskAll = adaptor.createMaskOp(vfInfo.elemType);
+        Value repeatTimes = adaptor.create<arith::CeilDivSIOp>(adaptor->getIndexType(), countVal, vfInfo.oneRepeatSize);
+        auto loop = adaptor.create<emitasc::VFForOp>(repeatTimes);
+        adaptor->setInsertionPointToStart(loop.getBody());
+        Value updateMask = adaptor.updateMaskOp(calCount, vfInfo.elemType);
+        Value mulOp = adaptor.create<arith::MulIOp>(loop.getInductionVar(), vfInfo.oneRepeatSize);
+        auto divOp = adaptor.create<arith::DivSIOp>(vfInfo.oneRepeatSize, consts.index(CHAR_BIT));
+        Value mul2Op = adaptor.create<arith::MulIOp>(loop.getInductionVar(), divOp);
+        Value offsetAct = adaptor.create<arith::AddIOp>(offset, mulOp);
+        Value offsetSel = adaptor.create<arith::AddIOp>(offset, mul2Op);
+        auto loadMaskOp = adaptor.create<ascvf::LoadOp>(maskReg, op.getSelMask(), offsetSel, updateMask);
+        auto load1Op = adaptor.create<ascvf::LoadOp>(src0Reg, op.getSrc0(), offsetAct, updateMask);
+        auto load2Op = adaptor.create<ascvf::LoadOp>(src1Reg, op.getSrc1(), offsetAct, updateMask);
+        adaptor.create<ascendc::SelectRegOp>(dstReg, src0Reg, src1Reg, maskReg);
+        auto storeOp = adaptor.create<ascvf::StoreOp>(op.getDst(), offsetAct, dstReg, updateMask);
+        adaptor->eraseOp(op);
+        return success();
+    }
+};
+
 template <typename ReduceHL, typename ReduceL2>
 struct ConvertHLReduceWithIndex : public ConvertOp<ReduceHL> {
     using ConvertOp<ReduceHL>::ConvertOp;
@@ -449,7 +517,6 @@ LogicalResult create1DDuplicateScalar(ascendc::DuplicateL2Op op, RewriterAdaptor
     Value updateMask = adaptor.updateMaskOp(calCount, vfInfo.elemType);
     Value mulOp = adaptor.create<arith::MulIOp>(loop.getInductionVar(), vfInfo.oneRepeatSize);
     auto storeOp = adaptor.create<ascvf::StoreOp>(op.getDst(), mulOp, tmpReg, updateMask);
-    setAlignmentAttr(storeOp);
     adaptor->eraseOp(op);
     return success();
 }
@@ -475,8 +542,7 @@ struct ConvertDuplicateL2 : public ConvertOp<ascendc::DuplicateL2Op> {
             makeNestedLoop(ArrayRef<int64_t>{dims}.drop_back(), ArrayRef<int64_t>{vfInfo.strides}.drop_back(), adaptor);
         auto type = ascendc::LocalTensorType::get(SmallVector<int64_t>{dims.back()}, vfInfo.elemType);
         auto dstView = adaptor.create<ascendc::LocalTensorSubIndexOp>(type, op.getDst(), offset);
-        auto srcView = adaptor.create<ascendc::LocalTensorSubIndexOp>(type, op.getScalar(), consts.index(0));
-        auto duplicateOp = adaptor.create<ascendc::DuplicateL2Op>(dstView, srcView, consts.index(dims.back()));
+        auto duplicateOp = adaptor.create<ascendc::DuplicateL2Op>(dstView, scalarVal, consts.index(dims.back()));
         if (create1DDuplicateScalar(duplicateOp, adaptor, vfInfo).failed())
             return failure();
         adaptor->eraseOp(op);
@@ -521,7 +587,7 @@ struct ConvertLoadOp : public ConvertOp<ascvf::LoadOp> {
 
     LogicalResult matchAndRewrite(ascvf::LoadOp loadOp, RewriterAdaptor& adaptor) const override
     {
-        auto subIndex = dyn_cast<ascendc::LocalTensorSubIndexOp>(loadOp.getSrcTensor().getDefiningOp());
+        auto subIndex = loadOp.getSrcTensor().getDefiningOp<ascendc::LocalTensorSubIndexOp>();
         if (!subIndex)
             return failure();
         auto offset = adaptor.create<arith::AddIOp>(subIndex.getIndex(), loadOp.getOffset());
@@ -538,7 +604,7 @@ struct ConvertStoreOp : public ConvertOp<ascvf::StoreOp> {
 
     LogicalResult matchAndRewrite(ascvf::StoreOp storeOp, RewriterAdaptor& adaptor) const override
     {
-        auto subIndex = dyn_cast<ascendc::LocalTensorSubIndexOp>(storeOp.getDstTensor().getDefiningOp());
+        auto subIndex = storeOp.getDstTensor().getDefiningOp<ascendc::LocalTensorSubIndexOp>();
         if (!subIndex)
             return failure();
         auto offset = adaptor.create<arith::AddIOp>(subIndex.getIndex(), storeOp.getOffset());
@@ -625,7 +691,7 @@ LogicalResult convertToReg(emitasc::VecScopeOp vecScopeOp)
         ConvertHLReduceWithIndex<ascendc::ReduceMinOp, ascendc::ReduceMinL2Op>, ConvertLoadOp, ConvertStoreOp,
         ConvertSubIndex,
         // Shape Manipulation Ops
-        ConvertDuplicateL2, ConvertBroadcast>(context, vfInfo);
+        ConvertDuplicateL2, ConvertBroadcast, ConvertCompareScalar, ConvertSelectL2>(context, vfInfo);
     return applyPartialConversion(vecScopeOp, target, std::move(patterns));
 }
 

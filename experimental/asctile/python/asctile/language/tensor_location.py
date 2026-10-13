@@ -14,5 +14,5 @@ from asc._C.libpyasc import asctile
 TensorLocation: TypeAlias = asctile.ir.asctile_TensorLocation
 TensorLocation.__name__ = "TensorLocation"
 
-TensorLocStr: TypeAlias = Literal["BT", "FIX", "L0A", "L0B", "L0C", "L1", "UB"]
+TensorLocStr: TypeAlias = Literal["Auto", "BT", "FIX", "L0A", "L0B", "L0C", "L1", "UB"]
 TensorLocLike: TypeAlias = Union[TensorLocation, TensorLocStr]

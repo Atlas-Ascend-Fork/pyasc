@@ -66,12 +66,15 @@ struct FulfillCopy : OpRewritePattern<CopyOp> {
         if (!midLoc)
             return failure();
         auto midType = LocalTensorType::get(dstType.getShape(), dstType.getElementType(), *midLoc);
-        auto midCopy = rewriter.create<CopyOp>(op.getLoc(), midType, op.getBase(), op.getOffsets());
+        DistribModeAttr distribMode = DistribModeAttr{};
+        if (*midLoc == TL::L1 && srcLoc == TL::UB)
+            distribMode = op.getDistribAttr();
+        auto midCopy = rewriter.create<CopyOp>(op.getLoc(), midType, op.getBase(), op.getOffsets(), distribMode);
         if (*midLoc == TL::L1 && dstLoc == TL::BT)
             midCopy->setAttr(attr::isBias, rewriter.getUnitAttr());
         Value zero = rewriter.create<arith::ConstantIntOp>(op.getLoc(), 0L, 32U);
         SmallVector<Value, 2> offsets{static_cast<size_t>(srcType.getRank()), zero};
-        rewriter.replaceOpWithNewOp<CopyOp>(op, dstType, midCopy, offsets);
+        rewriter.replaceOpWithNewOp<CopyOp>(op, dstType, midCopy, offsets, DistribModeAttr{});
         return success();
     }
 };

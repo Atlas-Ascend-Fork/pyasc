@@ -226,9 +226,10 @@ class JITFunction(Function[P, T]):
         kwargs = merge_dict(self.default_options, kwargs)
         codegen_options = self.extract_kwargs(self.codegen.options_cls, kwargs)
         compile_options = self.extract_kwargs(self.compiler.options_cls, kwargs)
-        call_args = inspect.signature(self.fn).bind(*args, **kwargs).arguments
+        bound_args = inspect.signature(self.fn).bind(*args, **kwargs)
+        bound_args.apply_defaults()
         annotations = get_annotations(self.fn)
-        runtime_args, constexprs = self.split_args(call_args, annotations)
+        runtime_args, constexprs = self.split_args(bound_args.arguments, annotations)
         arg_types = {name: self.get_arg_type(value) for name, value in runtime_args.items()}
         prereqs = CompilePrereqs(arg_types, constexprs, codegen_options, compile_options)
         kernel, mem_cache_key = self._compile_and_cache(prereqs)

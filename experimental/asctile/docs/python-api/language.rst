@@ -32,6 +32,7 @@ Programming model
     block_num
     sub_block_idx
     sub_block_num
+    cv_strategy
 
 
 Iterators
@@ -206,10 +207,23 @@ Debug operations
 
     device_assert
     device_print
-    inline
-    inline_vf
     static_assert
     static_print
+
+
+Low-level tweaking operations
+-----------------------------
+
+.. autosummary::
+    :toctree: generated
+    :nosignatures:
+
+    empty
+    empty_like
+    inline
+    inline_vf
+    from_asc
+    to_asc
 
 
 Utility functions

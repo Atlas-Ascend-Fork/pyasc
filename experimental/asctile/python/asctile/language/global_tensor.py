@@ -102,7 +102,7 @@ class GlobalTensor(IRValue):
 
 
 @require_jit
-def global_tensor(base: GlobalAddress, shape: Iterable[RuntimeInt]) -> GlobalTensor:
+def global_tensor(base: GlobalAddress, shape: Iterable[RuntimeInt], l2_cache: bool = True) -> GlobalTensor:
     """
     Define a new tensor descriptor for accessing data in global memory.
 
@@ -112,6 +112,7 @@ def global_tensor(base: GlobalAddress, shape: Iterable[RuntimeInt]) -> GlobalTen
     Args:
         base: The base address of an array in global memory representing the tensor
         shape: An iterable of integer-like values representing the number of elements for each dimension
+        l2_cache: Whether to enable the L2 cache for this tensor. Defaults to ``True``.
 
     Returns:
         GlobalTensor: A new tensor descriptor
@@ -132,8 +133,14 @@ def global_tensor(base: GlobalAddress, shape: Iterable[RuntimeInt]) -> GlobalTen
         Create a tensor with dynamic shape (using runtime values): ::
 
             x_gm = asctile.global_tensor(x_ptr, [num_rows, num_cols])
+
+        Create a tensor with L2 cache disabled. This disables the L2 cache for the tensor on both reads and writes,
+        which can improve performance in some scenarios: ::
+
+            x_gm = asctile.global_tensor(x_ptr, [size], l2_cache=False)
     """
     check_type("base", base, GlobalAddress)
+    check_type("l2_cache", l2_cache, bool)
     shape = verify_runtime_ints(shape, "shape")
     static_sizes = []
     dynamic_sizes = []
@@ -144,5 +151,6 @@ def global_tensor(base: GlobalAddress, shape: Iterable[RuntimeInt]) -> GlobalTen
             static_sizes.append(ir.dynshape)
             dynamic_sizes.append(mat(dim, int32).to_ir())
     ir_type = asctile.ir.get_asctile_GlobalTensorType(static_sizes, base.dtype.to_ir())
-    handle = global_builder.get_ir_builder().create_asctile_TensorOp(ir_type, base.to_ir(), dynamic_sizes)
+    handle = global_builder.get_ir_builder().create_asctile_TensorOp(ir_type, base.to_ir(), dynamic_sizes,
+                                                                     disableL2Cache=not l2_cache)
     return GlobalTensor.from_ir(handle)

@@ -52,7 +52,6 @@ def test_gather(data_count, index_count, index_range, read_count, row_len, offse
                 data_dtype, num_indices, pad_value, require_c310):
     require_c310()
     input = torch.arange(data_count * row_len).to(data_dtype).reshape([data_count, row_len])
-    torch.manual_seed(0)
     index = torch.randint(0, index_range, size=(index_count, ), dtype=index_dtype)
     items_align = 32 // input.element_size()
     result_row_len = asctile.ceildiv(row_len, items_align) * items_align

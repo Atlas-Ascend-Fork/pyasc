@@ -157,6 +157,26 @@ LogicalResult DimOp::verify()
 
 LogicalResult CopyOp::canonicalize(CopyOp op, PatternRewriter& rewriter) { return ascir::eraseUnusedOp(op, rewriter); }
 
+LogicalResult CopyOp::verify()
+{
+    auto distrib = getDistrib();
+    if (!distrib)
+        return success();
+    TensorLocation srcLoc = getBase().getType().getLoc();
+    TensorLocation dstLoc = getType().getLoc();
+    bool isL0cToUb = srcLoc == TensorLocation::L0C && dstLoc == TensorLocation::UB;
+    bool isUbToL1 = srcLoc == TensorLocation::UB && dstLoc == TensorLocation::L1;
+    if ((*distrib == DistribMode::JoinByM || *distrib == DistribMode::JoinByN) && isL0cToUb) {
+        return emitOpError() << "'distrib' mode " << stringifyDistribMode(*distrib)
+                             << " is only supported when copying from UB to L1";
+    }
+    if ((*distrib == DistribMode::SplitByM || *distrib == DistribMode::SplitByN) && isUbToL1) {
+        return emitOpError() << "'distrib' mode " << stringifyDistribMode(*distrib)
+                             << " is only supported when copying from L0C to UB";
+    }
+    return success();
+}
+
 //===----------------------------------------------------------------------===//
 // LoadOp
 //===----------------------------------------------------------------------===//
@@ -408,6 +428,42 @@ OpFoldResult PowerOp::fold(FoldAdaptor)
     double result = std::pow(
         lhsAttr.getSplatValue<FloatAttr>().getValueAsDouble(), rhsAttr.getSplatValue<FloatAttr>().getValueAsDouble());
     return SplatElementsAttr::get(type, FloatAttr::get(elemType, result));
+}
+
+//===----------------------------------------------------------------------===//
+// CVStrategyOp
+//===----------------------------------------------------------------------===//
+
+void CVStrategyOp::getCanonicalizationPatterns(RewritePatternSet& result, MLIRContext* context)
+{
+    result.add<ascir::EraseEmptyGroup<CVStrategyOp, YieldOp>, ascir::EraseUnusedResults<CVStrategyOp, YieldOp>>(
+        context);
+}
+
+LogicalResult CVStrategyOp::verify()
+{
+    auto split = getSplit();
+    if (split != DistribMode::SplitByM && split != DistribMode::SplitByN)
+        return emitOpError() << "has unsupported split mode " << stringifyDistribMode(split);
+    if (getOperation()->getParentOfType<CVStrategyOp>())
+        return emitOpError("cannot be nested in other asctile.cv_strategy op");
+    auto yieldOp = cast<asctile::YieldOp>(getBody()->getTerminator());
+    if (yieldOp.getNumOperands() != getNumResults())
+        return emitOpError() << "number of yield operands (" << yieldOp.getNumOperands()
+                             << ") must match number of results (" << getNumResults() << ")";
+    for (auto [result, operand] : llvm::zip_equal(getResults(), yieldOp.getOperands())) {
+        if (result.getType() == operand.getType())
+            continue;
+        auto resultType = dyn_cast<LocalTensorType>(result.getType());
+        auto operandType = dyn_cast<LocalTensorType>(operand.getType());
+        if (resultType && operandType && resultType.getLoc() == TensorLocation::UB &&
+            operandType.getLoc() == TensorLocation::UB && resultType.getRank() == operandType.getRank() &&
+            resultType.getElementType() == operandType.getElementType())
+            continue;
+        return emitOpError() << "yield operand #" << result.getResultNumber() << " type " << operand.getType()
+                             << " does not match result type " << result.getType();
+    }
+    return success();
 }
 
 //===----------------------------------------------------------------------===//

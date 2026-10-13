@@ -45,7 +45,7 @@ struct ConvertLoadGMToL0 : OpRewritePattern<asctile::LoadOp> {
             l1Tile.getDefiningOp()->setAttr(attr::isBias, rewriter.getUnitAttr());
         Value zero = rewriter.create<arith::ConstantOp>(op.getLoc(), rewriter.getI32IntegerAttr(0));
         SmallVector<Value> offsets(opType.getShape().size(), zero);
-        rewriter.replaceOpWithNewOp<asctile::CopyOp>(op, op.getType(), l1Tile, offsets);
+        rewriter.replaceOpWithNewOp<asctile::CopyOp>(op, op.getType(), l1Tile, offsets, DistribModeAttr{});
         return success();
     }
 };

@@ -35,11 +35,33 @@ bool hasStaticShapes(Operation* op)
 // VFGroupOp
 //===----------------------------------------------------------------------===//
 
+LogicalResult LoadOp::verify()
+{
+    if (auto regType = dyn_cast<ascendc::RegTensorType>(getDstReg().getType())) {
+        auto tensorType = cast<ascendc::LocalTensorType>(getSrcTensor().getType());
+        if (regType.getElementType() != tensorType.getElementType()) {
+            return emitOpError("elem type of reg tensor and local tensor must be the same");
+        }
+    }
+    return success();
+}
+
+LogicalResult StoreOp::verify()
+{
+    if (auto regType = dyn_cast<ascendc::RegTensorType>(getSrcReg().getType())) {
+        auto tensorType = cast<ascendc::LocalTensorType>(getDstTensor().getType());
+        if (regType.getElementType() != tensorType.getElementType()) {
+            return emitOpError("elem type of reg tensor and local tensor must be the same");
+        }
+    }
+    return success();
+}
+
 LogicalResult VFGroupOp::verify()
 {
     auto result = walk([&](Operation* op) {
         if (!hasStaticShapes(op)) {
-            op->emitOpError("inside asvf.vf_group must have static shape");
+            op->emitOpError("inside ascvf.vf_group must have static shape");
             return WalkResult::interrupt();
         }
         return WalkResult::advance();

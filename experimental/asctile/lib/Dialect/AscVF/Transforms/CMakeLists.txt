@@ -16,6 +16,7 @@ add_mlir_dialect_library(AscVFTransforms
   InlineVFGroup.cpp
   LowerToReg.cpp
   MaterializeLoadStore.cpp
+  PromoteCastOps.cpp
   ReorderOpsInVecScope.cpp
 
   ADDITIONAL_HEADER_DIRS

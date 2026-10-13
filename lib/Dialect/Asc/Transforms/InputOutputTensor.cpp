@@ -80,22 +80,11 @@ void createDataCopyIfNeeded(scf::ForOp forOp)
 
     Liveness liveness(forOp->template getParentOfType<func::FuncOp>());
 
-    const auto& forOpInVals = liveness.getLiveIn(forOp.getBody());
-    DenseSet<Value> initVals;
     SmallVector<OpOperand*, 4> operandsForCopy;
     for (auto& operand : forOp.getInitArgsMutable()) {
         Value operandVal = operand.get();
         if (!isUBTensor(operandVal))
             continue;
-
-        // Iter args initialization may be emitted into shallow copy of local tensor objects.
-        // Make a deep copy of initialization buffer if it is used as init value multiple times within same forOp,
-        // or used in or after the loop to prevent data corruption through writes into iteration argument's buffer.
-        if (initVals.contains(operandVal) || forOpInVals.contains(operandVal) ||
-            !liveness.isDeadAfter(operandVal, forOp))
-            operandsForCopy.push_back(&operand);
-        initVals.insert(operandVal);
-
         // Iter args re-assignment at yield may be emitted into shallow copy of local tensor objects as well.
         // Make a deep copy of yielded arg buffer before yield if corresponding iter arg is used after yielded value
         // definition to prevent data corruption of iter arg buffer through writes into yielded buffer.

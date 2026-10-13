@@ -12,7 +12,6 @@
 #include "asctile/Dialect/AscTile/Transforms/Passes.h"
 #include "asctile/Dialect/AscTile/Utils/Attributes.h"
 
-#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
@@ -97,8 +96,8 @@ struct CubeTransposeToLoad : OpRewritePattern<asctile::TransposeOp> {
             auto copyOpType = copyOp.getType();
             auto shape = copyOpType.getShape();
             Type newType = LocalTensorType::get({shape[1], shape[0]}, opType.getElementType(), copyOpType.getLoc());
-            auto newCopyOp =
-                rewriter.create<asctile::CopyOp>(op.getLoc(), newType, copyOp.getBase(), copyOp.getOffsets());
+            auto newCopyOp = rewriter.create<asctile::CopyOp>(
+                op.getLoc(), newType, copyOp.getBase(), copyOp.getOffsets(), copyOp.getDistribAttr());
             rewriter.replaceOp(copyOp, newCopyOp);
             rewriter.startOpModification(newCopyOp);
             newCopyOp->setAttr(attr, rewriter.getUnitAttr());

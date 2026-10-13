@@ -13,6 +13,25 @@
 
 include "mlir/Pass/PassBase.td"
 
+def ApplyCVStrategy : Pass<"asctile-apply-cv-strategy", "func::FuncOp"> {
+  let summary = "Apply annotated vector unit work splitting to copies, stores, elementwise operations, etc.";
+  let description = [{
+    Materialize the analysis results recorded by PrepareCVStrategy without revalidating the complete forwarding
+    chain. Split every operation carrying asctile.need_split and asctile.split_shape: L0C-to-UB copies produce the
+    annotated half-shape, UB-to-L1 copies and stores consume a split tensor while addressing the full tensor with the
+    sub-block offset, and elementwise operations, reductions, reshapes, and broadcasts split their operands and
+    produce their annotated result shapes.
+
+    Rewrite eligible scf.for loop-carried values so their init operands, region arguments, and results use the split
+    shape. Convert dump and inline operands as needed, remove the split annotations, and inline the surrounding
+    asctile.cv_strategy body.
+  }];
+  let constructor = "mlir::asctile::createApplyCVStrategyPass()";
+  let dependentDialects = [
+    "arith::ArithDialect", "ascendc::AscendCDialect", "asctile::AscTileDialect", "tensor::TensorDialect"
+  ];
+}
+
 def ApplyHomomorphism : Pass<"asctile-apply-homomorphism", "func::FuncOp"> {
   let summary = "Apply homomorphism-based transformations: scalarize elementwise operations with splat operands, etc.";
   let constructor = "mlir::asctile::createApplyHomomorphismPass()";
@@ -53,6 +72,17 @@ def ApplyHomomorphism : Pass<"asctile-apply-homomorphism", "func::FuncOp"> {
     %s = tensor.splat %r : tensor<Nxi32>
     ```
   }];
+}
+
+def CombineExtractSlice : Pass<"asctile-combine-extract-slice", "func::FuncOp"> {
+  let summary = "Fold tensor.extract_slice operations into compatible load and splat producers";
+  let description = [{
+    Combine eligible `tensor.extract_slice` operations with their producers:
+    - For contiguous slices of an `asctile.load`, adjust offsets and load the requested tensor directly.
+    - For `tensor.splat` sources, replace the slice with a splat of the original scalar.
+  }];
+  let constructor = "mlir::asctile::createCombineExtractSlicePass()";
+  let dependentDialects = ["arith::ArithDialect", "asctile::AscTileDialect", "tensor::TensorDialect"];
 }
 
 def CubeTransposeToLoad : Pass<"asctile-cube-transpose-to-load", "func::FuncOp"> {
@@ -265,6 +295,32 @@ def MergeCVGroups : Pass<"asctile-merge-cv-groups", "func::FuncOp"> {
       yield %cp, %ld2
     }
     ```
+  }];
+}
+
+def PrepareCVStrategy : Pass<"asctile-prepare-cv-strategy", "func::FuncOp"> {
+  let summary = "Prepare CV strategy regions by annotating copy-driven forwarding slices for splitting";
+  let constructor = "mlir::asctile::createPrepareCVStrategyPass()";
+  let description = [{
+    Examine each asctile.cv_strategy region and its asctile.copy operations. For a copy whose source is in L0C and
+    destination is in UB, validate that the copy uses the region's split mode, operates on 1D or 2D tensors, preserves
+    the full tensor shape, and satisfies the split's divisibility requirements: an even M dimension for split_by_m and
+    an N dimension divisible by 32 for split_by_n.
+
+    Derive the half-shape selected by the split mode and propagate it transactionally through the supported forwarding
+    def-use chain. Attach asctile.need_split and asctile.split_shape only after the complete strategy validates;
+    split_shape records the expected post-split result shape, or the stored-value shape for asctile.store.
+
+    Propagation supports shape-preserving copies and elementwise operations, stores, terminal dumps and inlines,
+    canonical reductions, safe expand/squeeze reshapes, and broadcasts that keep the active-axis mapping unambiguous.
+    The active axis is tracked per value: split_by_m uses axis 0, while split_by_n uses axis 0 for 1D values and axis
+    1 for 2D values; reductions and rank-changing operations may move it only when that mapping remains canonical.
+    L0C-to-UB copies propagate their split result, while terminal UB-to-L1 copies reconstruct the full L1 result.
+
+    Propagation follows asctile.yield operands to CV strategy results and continues through their supported external
+    users. It also follows a CV strategy result or propagated external-chain value yielded by scf.yield through the
+    corresponding scf.for result and validates the tied loop-carried region argument. Annotations are not committed if
+    any reachable operation is unsupported or receives conflicting split requests.
   }];
 }
 

@@ -27,22 +27,24 @@ class AscVF_Op<string mnemonic, list<Trait> traits = []> : Op<AscVF_Dialect, mne
 
 def LoadOp : AscVF_Op<"load"> {
   let description = "Load RegTensor from LocalTensor";
-  let arguments = (ins AscendC_RegTensor:$dstReg, AscendC_LocalTensor:$srcTensor,
-   AnySignlessIntegerOrIndex:$offset, AscendC_MaskReg:$mask);
+  let arguments = (ins AnyTypeOf<[AscendC_MaskReg, AscendC_RegTensor]>:$dstReg, AscendC_LocalTensor:$srcTensor,
+                   Index:$offset, AscendC_MaskReg:$mask);
   let assemblyFormat = [{
     $dstReg `,` $srcTensor `[` $offset `]` `,` $mask attr-dict `:` type($dstReg) `,`
     type($srcTensor) `,` type($offset) `,` type($mask)
   }];
+  let hasVerifier = 1;
 }
 
 def StoreOp : AscVF_Op<"store"> {
   let description = "Store RegTensor to LocalTensor";
-  let arguments = (ins AscendC_LocalTensor:$dstTensor, AnySignlessIntegerOrIndex:$offset,
-                   AscendC_RegTensor:$srcReg, AscendC_MaskReg:$mask);
+  let arguments = (ins AscendC_LocalTensor:$dstTensor, Index:$offset,
+                   AnyTypeOf<[AscendC_MaskReg, AscendC_RegTensor]>:$srcReg, AscendC_MaskReg:$mask);
   let assemblyFormat = [{
     $dstTensor `[` $offset `]` `,` $srcReg `,` $mask attr-dict `:` type($dstTensor) `,`
     type($offset) `,` type($srcReg) `,` type($mask)
   }];
+  let hasVerifier = 1;
 }
 
 def BarrierOp : AscVF_Op<"barrier"> {

@@ -13,6 +13,22 @@
 #include <sstream>
 
 using namespace llvm;
+
+namespace {
+
+void replaceAll(std::string& str, const std::string& fromStr, const std::string& toStr)
+{
+    if (fromStr.empty())
+        return;
+    size_t pos = 0;
+    while ((pos = str.find(fromStr, pos)) != std::string::npos) {
+        str.replace(pos, fromStr.size(), toStr);
+        pos += toStr.size();
+    }
+}
+
+} // namespace
+
 namespace mlir {
 namespace asc {
 StringRef fetchOpClass(StringRef defName)
@@ -85,16 +101,37 @@ void fetchArguments(const DagInit* argsDag, std::vector<VirtualArg>& dest)
             }
         } else if (argDef->isSubClassOf("AttrConstraint")) {
             arg.cppType = argDef->getValueAsString("returnType");
-            if (argDef->getName() == "UnitAttr") {
+            if (argDef->getValueAsBit("isOptional")) {
+                const Record* base = nullptr;
+                if (const auto* baseInit = dyn_cast<DefInit>(argDef->getValueInit("baseAttr")))
+                    base = baseInit->getDef();
                 arg.optional = true;
-                arg.substitution = arg.name;
-                arg.defaultValue = "false";
-            } else if (argDef->isSubClassOf("OptionalAttr")) {
-                arg.optional = true;
-                std::stringstream str;
-                str << arg.name << ".value_or(" << argDef->getValueAsString("storageType").str() << "{})";
-                arg.substitution = str.str();
-                arg.defaultValue = "py::none()";
+                if (argDef->getName() == "UnitAttr" || argDef->isSubClassOf("UnitAttr") ||
+                    base && base->isSubClassOf("UnitAttr")) {
+                    arg.substitution = arg.name;
+                    arg.defaultValue = "false";
+                } else {
+                    if (argDef->getValueInit("defaultValue")->isComplete())
+                        arg.defaultValue = argDef->getValueAsString("defaultValue").str();
+                    else
+                        arg.defaultValue = "py::none()";
+                    StringRef storage = argDef->getValueAsString("storageType").trim();
+                    StringRef baseReturn = base ? base->getValueAsString("returnType").trim() : StringRef();
+                    if (base == nullptr || baseReturn.empty() || baseReturn == storage ||
+                        !base->getValueInit("constBuilderCall")->isComplete()) {
+                        std::stringstream str;
+                        str << arg.name << ".value_or(" << storage.data() << "{})";
+                        arg.substitution = str.str();
+                    } else {
+                        std::string builderCall = base->getValueAsString("constBuilderCall").str();
+                        replaceAll(builderCall, "$0", "(*" + arg.name + ")");
+                        replaceAll(builderCall, "$_builder", "self.getBuilder()");
+                        replaceAll(builderCall, "$_ctxt", "self->getContext()");
+                        std::stringstream str;
+                        str << arg.name << " ? " << builderCall << " : " << storage.data() << "{}";
+                        arg.substitution = str.str();
+                    }
+                }
             }
         }
         dest.push_back(arg);

@@ -9,7 +9,7 @@
 // RUN: ascir-translate -mlir-to-ascendc %s | FileCheck %s
 
 // CHECK-LABEL:void emit_data_copy_vld_reg(AscendC::Reg::RegTensor<float> v1, float* v2) {
-// CHECK-NEXT:  AscendC::Reg::DataCopy<float, AscendC::Reg::LoadDist::DIST_NORM>(v1, v2);
+// CHECK-NEXT:  AscendC::Reg::LoadAlign<float, AscendC::Reg::LoadDist::DIST_NORM>(v1, v2);
 // CHECK-NEXT:  return;
 // CHECK-NEXT:}
 func.func @emit_data_copy_vld_reg(%dstReg: !ascendc.reg_tensor<f32>, %src: memref<?xf32>) {
@@ -18,11 +18,65 @@ func.func @emit_data_copy_vld_reg(%dstReg: !ascendc.reg_tensor<f32>, %src: memre
 }
 
 // CHECK-LABEL:void emit_data_copy_vst_reg(float* v1, AscendC::Reg::RegTensor<float> v2, AscendC::Reg::MaskReg v3) {
-// CHECK-NEXT:  AscendC::Reg::DataCopy<float, AscendC::Reg::StoreDist::DIST_NORM>(v1, v2, v3);
+// CHECK-NEXT:  AscendC::Reg::StoreAlign<float, AscendC::Reg::StoreDist::DIST_NORM>(v1, v2, v3);
 // CHECK-NEXT:  return;
 // CHECK-NEXT:}
 func.func @emit_data_copy_vst_reg(%dst: memref<?xf32>, %srcReg: !ascendc.reg_tensor<f32>, %maskReg: !ascendc.mask_reg) {
   ascendc.data_copy_vst_reg %dst, %srcReg, %maskReg {dist = 16 : i32} : memref<?xf32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
+  return
+}
+
+// CHECK-LABEL:void emit_vld_unalign_reg(AscendC::Reg::RegTensor<float> v1, AscendC::Reg::UnalignReg v2, float* v3) {
+// CHECK-NEXT:  AscendC::Reg::LoadUnAlign(v1, v2, v3);
+// CHECK-NEXT:  return;
+// CHECK-NEXT:}
+func.func @emit_vld_unalign_reg(%dstReg: !ascendc.reg_tensor<f32>, %uReg: !ascendc.unalign_reg, %src: memref<?xf32>) {
+  ascendc.vld_unalign_reg %dstReg, %uReg, %src : !ascendc.reg_tensor<f32>, !ascendc.unalign_reg, memref<?xf32>
+  return
+}
+
+// CHECK-LABEL:void emit_vld_unalign_pre_reg(AscendC::Reg::UnalignReg v1, float* v2) {
+// CHECK-NEXT:  AscendC::Reg::LoadUnAlignPre(v1, v2);
+// CHECK-NEXT:  return;
+// CHECK-NEXT:}
+func.func @emit_vld_unalign_pre_reg(%uReg: !ascendc.unalign_reg, %src: memref<?xf32>) {
+  ascendc.vld_unalign_pre_reg %uReg, %src : !ascendc.unalign_reg, memref<?xf32>
+  return
+}
+
+// CHECK-LABEL:void emit_vst_unalign_reg(float* v1, AscendC::Reg::RegTensor<float> v2, AscendC::Reg::UnalignReg v3) {
+// CHECK-NEXT:  AscendC::Reg::StoreUnAlign(v1, v2, v3);
+// CHECK-NEXT:  return;
+// CHECK-NEXT:}
+func.func @emit_vst_unalign_reg(%dst: memref<?xf32>, %srcReg: !ascendc.reg_tensor<f32>, %uReg: !ascendc.unalign_reg) {
+  ascendc.vst_unalign_reg %dst, %srcReg, %uReg : memref<?xf32>, !ascendc.reg_tensor<f32>, !ascendc.unalign_reg
+  return
+}
+
+// CHECK-LABEL:void emit_vst_unalign_post_reg(float* v1, AscendC::Reg::UnalignReg v2) {
+// CHECK-NEXT:  AscendC::Reg::StoreUnAlignPost(v1, v2);
+// CHECK-NEXT:  return;
+// CHECK-NEXT:}
+func.func @emit_vst_unalign_post_reg(%dst: memref<?xf32>, %uReg: !ascendc.unalign_reg) {
+  ascendc.vst_unalign_post_reg %dst, %uReg : memref<?xf32>, !ascendc.unalign_reg
+  return
+}
+
+// CHECK-LABEL:void emit_mask_gen_with_reg_tensor(AscendC::Reg::MaskReg v1, AscendC::Reg::RegTensor<uint8_t> v2) {
+// CHECK-NEXT:  AscendC::Reg::MaskGenWithRegTensor<uint32_t, 0>(v1, reinterpret_cast<AscendC::Reg::RegTensor<uint32_t>&>(v2));
+// CHECK-NEXT:  return;
+// CHECK-NEXT:}
+func.func @emit_mask_gen_with_reg_tensor(%dst: !ascendc.mask_reg, %src: !ascendc.reg_tensor<ui8>) {
+  ascendc.mask_gen_with_reg_tensor %dst, %src {type = ui32} : !ascendc.mask_reg, !ascendc.reg_tensor<ui8>
+  return
+}
+
+// CHECK-LABEL:void emit_compare_scalar_reg(AscendC::Reg::MaskReg v1, AscendC::Reg::RegTensor<float> v2, float v3, AscendC::Reg::MaskReg v4) {
+// CHECK-NEXT:  AscendC::Reg::CompareScalar<float, AscendC::CMPMODE::EQ>(v1, v2, v3, v4);
+// CHECK-NEXT:  return;
+// CHECK-NEXT:}
+func.func @emit_compare_scalar_reg(%dst: !ascendc.mask_reg, %src: !ascendc.reg_tensor<f32>, %cst: f32, %mask: !ascendc.mask_reg) {
+  ascendc.compare_scalar_reg %dst, %src, %cst, %mask {cmpMode = 2 : i64} : !ascendc.mask_reg, !ascendc.reg_tensor<f32>, f32, !ascendc.mask_reg
   return
 }
 
@@ -41,6 +95,24 @@ func.func @emit_update_mask(%count: memref<?xi32>) {
 // CHECK-NEXT:}
 func.func @emit_reg_tensor() {
   %reg = ascendc.reg_tensor : !ascendc.reg_tensor<f32>
+  return
+}
+
+// CHECK-LABEL:void emit_unalign_reg() {
+// CHECK-NEXT:  AscendC::Reg::UnalignReg v1 = AscendC::Reg::UnalignReg();
+// CHECK-NEXT:  return;
+// CHECK-NEXT:}
+func.func @emit_unalign_reg() {
+  %reg = ascendc.unalign_reg : !ascendc.unalign_reg
+  return
+}
+
+// CHECK-LABEL:void emit_mask_reg() {
+// CHECK-NEXT:  AscendC::Reg::MaskReg v1 = AscendC::Reg::MaskReg();
+// CHECK-NEXT:  return;
+// CHECK-NEXT:}
+func.func @emit_mask_reg() {
+  %mask = ascendc.mask_reg : !ascendc.mask_reg
   return
 }
 

@@ -15,6 +15,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/Types.h"
 #include "mlir/IR/Value.h"
@@ -36,9 +37,6 @@ using namespace mlir;
 using mlir::ascir::PyOpBuilder;
 
 namespace {
-
-std::vector<Type> noTypes;
-std::vector<Value> noValues;
 
 void bindCreateAscTileOperations(py::class_<PyOpBuilder>& clss)
 {
@@ -70,8 +68,22 @@ void bindCreateAscTileOperations(py::class_<PyOpBuilder>& clss)
             [](PyOpBuilder& self, const Value& cond, const std::string& msg) {
                 self.create<asctile::AssertOp>(cond, self->getStringAttr(msg));
             })
+        .def(
+            "create_asctile_InlineOp",
+            [](PyOpBuilder& self, const std::string& value, const std::optional<std::vector<Value>>& args) {
+                static std::vector<Value> noValues;
+                self.create<asctile::InlineOp>(self->getStringAttr(value), args.value_or(noValues));
+            },
+            "value"_a, "args"_a = py::none())
 #include "asctile/Dialect/AscTile/IR/AscTileOpBindings.h.inc"
         ;
+}
+
+void bindCreateBuiltinOperations(py::class_<PyOpBuilder>& clss)
+{
+    clss.def("create_UnrealizedConversionCastOp", [](PyOpBuilder& self, Type result, Value operand) -> Value {
+        return self.create<UnrealizedConversionCastOp>(result, operand)->getResult(0);
+    });
 }
 
 void bindCreateTensorOperations(py::class_<PyOpBuilder>& clss)
@@ -88,6 +100,11 @@ void bindCreateTensorOperations(py::class_<PyOpBuilder>& clss)
             "create_tensor_ConcatOp",
             [](PyOpBuilder& self, Type result, uint64_t dim, const std::vector<Value>& inputs) -> Value {
                 return self.create<tensor::ConcatOp>(result, dim, inputs);
+            })
+        .def(
+            "create_tensor_EmptyOp",
+            [](PyOpBuilder& self, Type result) -> Value {
+                return self.create<tensor::EmptyOp>(result, /*dynamicSizes*/ ValueRange{});
             })
         .def(
             "create_tensor_SplatOp",
@@ -108,5 +125,6 @@ void bindCreateTensorOperations(py::class_<PyOpBuilder>& clss)
 void mlir::asctile::initAsctileBuilder(pybind11::class_<PyOpBuilder>& clss)
 {
     bindCreateAscTileOperations(clss);
+    bindCreateBuiltinOperations(clss);
     bindCreateTensorOperations(clss);
 }

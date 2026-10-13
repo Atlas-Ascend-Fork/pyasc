@@ -28,6 +28,7 @@ std::unique_ptr<Pass> createFuseVFForPass();
 std::unique_ptr<Pass> createInlineVFGroupPass();
 std::unique_ptr<Pass> createLowerToRegPass();
 std::unique_ptr<Pass> createMaterializeLoadStorePass();
+std::unique_ptr<Pass> createPromoteCastOpsPass();
 std::unique_ptr<Pass> createReorderOpsInVecScopePass();
 
 } // namespace ascvf

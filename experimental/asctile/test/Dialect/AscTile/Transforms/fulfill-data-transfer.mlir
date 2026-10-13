@@ -37,3 +37,23 @@ func.func @invalid_copy_ub_to_bt(%arg0: tensor<16x16xf32, #asctile.local<UB>>, %
   %0 = asctile.copy %arg0[%arg1, %arg2] : tensor<16x16xf32, #asctile.local<UB>>, tensor<16x16xf32, #asctile.local<BT>>
   return %0 : tensor<16x16xf32, #asctile.local<BT>>
 }
+
+// CHECK-LABEL: func.func @invalid_copy_ub_to_bt_with_distrib(%arg0: tensor<16xf32, #asctile.local<UB>>, %arg1: i32) -> tensor<16xf32, #asctile.local<BT>> {
+// CHECK:       %0 = asctile.copy %arg0[%arg1] {asctile.is_bias, distrib = #asctile.distrib_mode<full_vec0>} : tensor<16xf32, #asctile.local<UB>>, tensor<16xf32, #asctile.local<L1>>
+// CHECK-NEXT:  %1 = asctile.copy %0[%c0_i32] : tensor<16xf32, #asctile.local<L1>>, tensor<16xf32, #asctile.local<BT>>
+// CHECK-NEXT:  return %1 : tensor<16xf32, #asctile.local<BT>>
+// CHECK-NEXT:}
+func.func @invalid_copy_ub_to_bt_with_distrib(%arg0: tensor<16xf32, #asctile.local<UB>>, %arg1: i32) -> tensor<16xf32, #asctile.local<BT>> {
+  %0 = asctile.copy %arg0[%arg1] {distrib = #asctile.distrib_mode<full_vec0>} : tensor<16xf32, #asctile.local<UB>>, tensor<16xf32, #asctile.local<BT>>
+  return %0 : tensor<16xf32, #asctile.local<BT>>
+}
+
+// CHECK-LABEL: func.func @invalid_copy_ub_to_l0a_with_distrib(%arg0: tensor<16x16xf32, #asctile.local<UB>>, %arg1: i32, %arg2: i32) -> tensor<16x16xf32, #asctile.local<L0A>> {
+// CHECK:       %0 = asctile.copy %arg0[%arg1, %arg2] {distrib = #asctile.distrib_mode<full_vec1>} : tensor<16x16xf32, #asctile.local<UB>>, tensor<16x16xf32, #asctile.local<L1>>
+// CHECK-NEXT:  %1 = asctile.copy %0[%c0_i32, %c0_i32] : tensor<16x16xf32, #asctile.local<L1>>, tensor<16x16xf32, #asctile.local<L0A>>
+// CHECK-NEXT:  return %1 : tensor<16x16xf32, #asctile.local<L0A>>
+// CHECK-NEXT:}
+func.func @invalid_copy_ub_to_l0a_with_distrib(%arg0: tensor<16x16xf32, #asctile.local<UB>>, %arg1: i32, %arg2: i32) -> tensor<16x16xf32, #asctile.local<L0A>> {
+  %0 = asctile.copy %arg0[%arg1, %arg2] {distrib = #asctile.distrib_mode<full_vec1>} : tensor<16x16xf32, #asctile.local<UB>>, tensor<16x16xf32, #asctile.local<L0A>>
+  return %0 : tensor<16x16xf32, #asctile.local<L0A>>
+}

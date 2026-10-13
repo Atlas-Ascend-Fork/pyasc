@@ -95,6 +95,21 @@ def AscTile_RoundMode : I32EnumAttr<"RoundMode", "cast rounding mode", [
 
 def AscTile_RoundModeAttr : AscTile_EnumAttr<AscTile_RoundMode, "round_mode">;
 
+def AscTile_DistribMode : I32EnumAttr<"DistribMode", "distribution mode", [
+  I32EnumAttrCase<"FullVec0", 0, "full_vec0">,
+  I32EnumAttrCase<"FullVec1", 1, "full_vec1">,
+  I32EnumAttrCase<"SplitByM", 2, "split_by_m">,
+  I32EnumAttrCase<"SplitByN", 3, "split_by_n">,
+  I32EnumAttrCase<"JoinByM", 4, "join_by_m">,
+  I32EnumAttrCase<"JoinByN", 5, "join_by_n">,
+]> {
+  let cppNamespace = "::mlir::asctile";
+  let description = "Distribution strategy of the tensor data across the vector sub-blocks";
+  let genSpecializedAttr = 0;
+}
+ 
+def AscTile_DistribModeAttr : AscTile_EnumAttr<AscTile_DistribMode, "distrib_mode">;
+
 def AscTile_GlobalTensorAttr : AscTile_Attr<"GlobalTensor", "global",
   [DeclareAttrInterfaceMethods<VerifiableTensorEncoding>]> {
   let summary = "An encoding for a global tensor";

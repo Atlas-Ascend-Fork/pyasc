@@ -30,6 +30,18 @@ func.func @lower_tensor_dynamic(%arg0: memref<*xi32, 22>, %arg1: i32, %arg2: i32
   return %0 : tensor<?x8x?xi32, #asctile.global>
 }
 
+// CHECK-LABEL: func.func @lower_tensor_l2_cache_disabled(%arg0: memref<*xf32, 22>) -> tensor<16x8xf32, #asctile.global> {
+// CHECK-NEXT:  %0 = ascendc.global_tensor : !ascendc.global_tensor<16x8xf32>
+// CHECK-NEXT:  ascendc.global_tensor.set_global_buffer %0, %arg0 : !ascendc.global_tensor<16x8xf32>, memref<*xf32, 22>
+// CHECK-NEXT:  ascendc.global_tensor.set_l2_cache_hint %0 {mode = 0 : i32, rwMode = 3 : i32} : !ascendc.global_tensor<16x8xf32>
+// CHECK-NEXT:  %1 = builtin.unrealized_conversion_cast %0 : !ascendc.global_tensor<16x8xf32> to tensor<16x8xf32, #asctile.global>
+// CHECK-NEXT:  return %1 : tensor<16x8xf32, #asctile.global>
+// CHECK-NEXT:}
+func.func @lower_tensor_l2_cache_disabled(%arg0: memref<*xf32, 22>) -> tensor<16x8xf32, #asctile.global> {
+  %0 = asctile.tensor %arg0() {disableL2Cache} : memref<*xf32, 22>, tensor<16x8xf32, #asctile.global>
+  return %0 : tensor<16x8xf32, #asctile.global>
+}
+
 // CHECK-LABEL: func.func @lower_accumulator() -> tensor<64x256xf32, #asctile.local<L0C>> {
 // CHECK-NEXT:  %0 = ascendc.local_tensor_auto co1() : <64x256xf32>
 // CHECK-NEXT:  %1 = builtin.unrealized_conversion_cast %0 : !ascendc.local_tensor<64x256xf32> to tensor<64x256xf32, #asctile.local<L0C>>
@@ -392,5 +404,16 @@ func.func @lower_dump_global_tensor_dynamic(%arg0: memref<*xf32, 22>, %arg1: i32
 func.func @lower_dump_global_tensor_mixed(%arg0: memref<*xf32, 22>, %arg1: i32, %arg2: i32) {
   %0 = asctile.tensor %arg0(%arg1, %arg2) : memref<*xf32, 22>, tensor<?x?x32xf32, #asctile.global>
   asctile.dump_tensor %0 : tensor<?x?x32xf32, #asctile.global>
+  return
+}
+
+// CHECK-LABEL: func.func @lower_inline(%arg0: memref<*xf32, 22>, %arg1: i32, %arg2: tensor<?x?x32xf32, #asctile.global>, %arg3: tensor<32xf32, #asctile.local<UB>>) {
+// CHECK-NEXT:  %0 = builtin.unrealized_conversion_cast %arg3 : tensor<32xf32, #asctile.local<UB>> to !ascendc.local_tensor<32xf32>
+// CHECK-NEXT:  %1 = builtin.unrealized_conversion_cast %arg2 : tensor<?x?x32xf32, #asctile.global> to !ascendc.global_tensor<?x?x32xf32>
+// CHECK-NEXT:  emitasc.verbatim "123 $0;" %arg0, %arg1, %1, %0 : memref<*xf32, 22>, i32, !ascendc.global_tensor<?x?x32xf32>, !ascendc.local_tensor<32xf32>
+// CHECK-NEXT:  return
+// CHECK-NEXT:}
+func.func @lower_inline(%arg0: memref<*xf32, 22>, %arg1: i32, %arg2: tensor<?x?x32xf32, #asctile.global>, %arg3: tensor<32xf32, #asctile.local<UB>>) {
+  asctile.inline "123 $0;" %arg0, %arg1, %arg2, %arg3 : memref<*xf32, 22>, i32, tensor<?x?x32xf32, #asctile.global>, tensor<32xf32, #asctile.local<UB>>
   return
 }

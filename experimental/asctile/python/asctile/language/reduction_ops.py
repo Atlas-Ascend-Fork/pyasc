@@ -23,6 +23,8 @@ from .validation import check_dtype, check_type
 def get_reduction_shape(tensor_shape: Tuple[int, ...], keep_dims: bool, dims: Tuple[int, ...]) -> List[int]:
     reduce_dims = [False] * len(tensor_shape)
     for dim in dims:
+        if dim < 0 or dim >= len(tensor_shape):
+            raise IndexError(f"Dimension {dim} out of range for shape {tensor_shape}")
         reduce_dims[dim] = True
     result = []
     for i in range(0, len(reduce_dims)):

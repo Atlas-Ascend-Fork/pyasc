@@ -68,27 +68,28 @@ func.func @different_group_if_between_op_exist_other_op(%vec: !ascendc.local_ten
 func.func private @blank()
 
 // CHECK-LABEL: func.func @create_nested_vec_scope
-func.func @create_nested_vec_scope(%c0_i32 : i32, %dst0 : !ascendc.local_tensor<256xf32>, %dst1 : !ascendc.local_tensor<256xf32>, %src : !ascendc.local_tensor<256xf32>) {
+func.func @create_nested_vec_scope(%dst0 : !ascendc.local_tensor<256xf32>, %dst1 : !ascendc.local_tensor<256xf32>, %src : !ascendc.local_tensor<256xf32>) {
+  %c256_i32 = arith.constant 256 : i32
   %c1_idx = arith.constant 1 : index
 // CHECK: scf.for
 // CHECK: ascvf.vf_group
 // CHECK-NOT: ascvf.vf_group
   scf.for %arg0 = %c1_idx to %c1_idx step %c1_idx {
-    ascendc.add_l2 %dst0, %src, %src, %c0_i32 : !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, i32
-    ascendc.mul_l2 %dst1, %dst0, %src, %c0_i32 : !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, i32
+    ascendc.add_l2 %dst0, %src, %src, %c256_i32 : !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, i32
+    ascendc.mul_l2 %dst1, %dst0, %src, %c256_i32 : !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, i32
     %true = arith.constant true
 // CHECK: scf.if
 // CHECK: ascvf.vf_group
 // CHECK-NOT: ascvf.vf_group
     scf.if %true {
-      ascendc.add_l2 %dst0, %src, %src, %c0_i32 : !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, i32
-      ascendc.mul_l2 %dst1, %dst0, %src, %c0_i32 : !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, i32
+      ascendc.add_l2 %dst0, %src, %src, %c256_i32 : !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, i32
+      ascendc.mul_l2 %dst1, %dst0, %src, %c256_i32 : !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, i32
 // CHECK: } else {
 // CHECK: ascvf.vf_group
 // CHECK-NOT: ascvf.vf_group
     } else {
-      ascendc.add_l2 %dst0, %src, %src, %c0_i32 : !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, i32
-      ascendc.mul_l2 %dst1, %dst0, %src, %c0_i32 : !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, i32
+      ascendc.add_l2 %dst0, %src, %src, %c256_i32 : !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, i32
+      ascendc.mul_l2 %dst1, %dst0, %src, %c256_i32 : !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, !ascendc.local_tensor<256xf32>, i32
     }
   }
   return

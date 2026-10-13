@@ -19,6 +19,8 @@
 #include "mlir/IR/Dominance.h"
 #include "llvm/ADT/TypeSwitch.h"
 
+#include <numeric>
+
 namespace mlir {
 namespace ascvf {
 #define GEN_PASS_DEF_FINDVFGROUP
@@ -55,6 +57,35 @@ bool isARPattern(ascendc::BroadcastOp bcastOp)
     return shape1 == shape2;
 }
 
+ascendc::LocalTensorType getType(Operation* op)
+{
+    return llvm::TypeSwitch<Operation*, ascendc::LocalTensorType>(op)
+        .Case<ascendc::CompareScalarL2Op>([](ascendc::CompareScalarL2Op op) {
+            auto type = dyn_cast<ascendc::LocalTensorType>(op.getSrc0().getType());
+            assert(type);
+            return type;
+        })
+        .Case<
+            ascendc::BinaryL2Op, ascendc::UnaryL2Op, ascendc::VecScalarL2Op, ascendc::DuplicateL2Op,
+            ascendc::BroadcastOp, ascendc::SelectL2Op>([](auto op) {
+            auto type = dyn_cast<ascendc::LocalTensorType>(op.getDst().getType());
+            assert(type);
+            return type;
+        })
+        .Case<
+            ascendc::ReduceMaxL2Op, ascendc::ReduceMinL2Op, ascendc::ReduceSumL2Op, ascendc::ReduceSumOp,
+            ascendc::ReduceMaxOp>([](auto op) {
+            auto type = dyn_cast<ascendc::LocalTensorType>(op.getSrc().getType());
+            assert(type);
+            return type;
+        })
+        .Default([](Operation* op) {
+            op->dump();
+            llvm_unreachable("was not expected this type");
+            return ascendc::LocalTensorType{};
+        });
+}
+
 bool isFusible(Operation* op)
 {
     return llvm::TypeSwitch<Operation*, bool>(op)
@@ -63,8 +94,6 @@ bool isFusible(Operation* op)
         .Case<ascendc::BroadcastOp>([](auto bcastOp) { return isARPattern(bcastOp); })
         .Case<
             ascendc::DuplicateL2Op,
-            // Reduce operation (L2)
-            ascendc::ReduceMaxL2Op, ascendc::ReduceMinL2Op, ascendc::ReduceSumL2Op,
             // Vector binary operations (L2)
             ascendc::AddL2Op, ascendc::AndL2Op, ascendc::DivL2Op, ascendc::FusedAbsSubL2Op, ascendc::FusedExpSubL2Op,
             ascendc::SubL2Op, ascendc::MaxL2Op, ascendc::MinL2Op, ascendc::MulL2Op, ascendc::MulAddDstL2Op,
@@ -74,31 +103,22 @@ bool isFusible(Operation* op)
             ascendc::SqrtL2Op,
             // Vector scalar operations (L2)
             ascendc::AddsL2Op, ascendc::MulsL2Op, ascendc::SubsL2Op, ascendc::DivsL2Op, ascendc::MaxsL2Op,
-            ascendc::MinsL2Op, ascendc::LeakyReluL2Op, ascendc::ShiftLeftL2Op, ascendc::ShiftRightL2Op>(
-            [](auto) { return true; })
+            ascendc::MinsL2Op, ascendc::LeakyReluL2Op, ascendc::ShiftLeftL2Op, ascendc::ShiftRightL2Op,
+            ascendc::CompareScalarL2Op, ascendc::SelectL2Op>([](auto op) {
+            if (auto opt = getConstantIntValue(op.getCalCount())) {
+                auto type = getType(op);
+                return opt.value() == type.getNumElements();
+            }
+            return false;
+        })
+        .Case<ascendc::ReduceMaxL2Op, ascendc::ReduceMinL2Op, ascendc::ReduceSumL2Op>([](auto op) {
+            if (auto opt = getConstantIntValue(op.getCount())) {
+                auto type = getType(op);
+                return opt.value() == type.getNumElements();
+            }
+            return false;
+        })
         .Default([](Operation*) { return false; });
-}
-
-Type getType(Operation* op)
-{
-    return llvm::TypeSwitch<Operation*, Type>(op)
-        .Case<
-            ascendc::BinaryL2Op, ascendc::UnaryL2Op, ascendc::VecScalarL2Op, ascendc::DuplicateL2Op,
-            ascendc::BroadcastOp>([](auto op) {
-            assert(isa<ascendc::LocalTensorType>(op.getDst().getType()));
-            return op.getDst().getType();
-        })
-        .Case<
-            ascendc::ReduceMaxL2Op, ascendc::ReduceMinL2Op, ascendc::ReduceSumL2Op, ascendc::ReduceSumOp,
-            ascendc::ReduceMaxOp>([](auto op) {
-            assert(isa<ascendc::LocalTensorType>(op.getSrc().getType()));
-            return op.getSrc().getType();
-        })
-        .Default([](Operation* op) {
-            op->dump();
-            llvm_unreachable("was not expected this type");
-            return Type{};
-        });
 }
 
 bool isSameGroup(Operation* firstOp, Operation* secondOp) { return getType(firstOp) == getType(secondOp); }
@@ -182,10 +202,41 @@ ValueVector getOutputLocalTensors(ArrayRef<Operation*> group)
             .Case<
                 ascendc::BinaryL2Op, ascendc::UnaryL2Op, ascendc::VecScalarL2Op, ascendc::ReduceMaxL2Op,
                 ascendc::ReduceMinL2Op, ascendc::ReduceSumL2Op, ascendc::ReduceSumOp, ascendc::ReduceMaxOp,
-                ascendc::DuplicateL2Op, ascendc::BroadcastOp>(
+                ascendc::DuplicateL2Op, ascendc::BroadcastOp, ascendc::CompareScalarL2Op, ascendc::SelectL2Op>(
                 [&](auto op) { outputLocalTensors.push_back(op.getDst()); });
     }
     return ascvf::deduplicate(outputLocalTensors);
+}
+
+SmallVector<int64_t> getSplitPosition(Operation* op)
+{
+    return llvm::TypeSwitch<Operation*, SmallVector<int64_t>>(op)
+        .Case<
+            ascendc::BinaryL2Op, ascendc::UnaryL2Op, ascendc::VecScalarL2Op, ascendc::ReduceMaxL2Op,
+            ascendc::ReduceMinL2Op, ascendc::ReduceSumL2Op, ascendc::DuplicateL2Op, ascendc::CompareScalarL2Op,
+            ascendc::SelectL2Op>([](auto) { return SmallVector<int64_t>{}; })
+        .Case<ascendc::ReduceSumOp, ascendc::ReduceMaxOp, ascendc::BroadcastOp>(
+            [](auto op) { return llvm::to_vector(llvm::seq<int64_t>(1, op.getSrc().getType().getRank())); });
+}
+
+// Fuse dimensions of group type
+// Ex [12, 34, 56] -> [12 * 34 * 56]
+Type fuseGroupType(OpGroup& group)
+{
+    auto groupType = cast<ascendc::LocalTensorType>(group.groupType);
+    auto shape = groupType.getShape();
+    std::set<int64_t> splits{0, static_cast<int64_t>(shape.size())};
+    for (auto* op : group.ops) {
+        auto vec = getSplitPosition(op);
+        splits.insert(vec.begin(), vec.end());
+    }
+    SmallVector<int64_t> newShape;
+    for (auto left = splits.begin(), right = std::next(left); right != splits.end();
+         left = right, right = std::next(right)) {
+        int64_t product = std::accumulate(shape.begin() + *left, shape.begin() + *right, 1L, std::multiplies());
+        newShape.push_back(product);
+    }
+    return ascendc::LocalTensorType::get(newShape, groupType.getElementType());
 }
 
 ascvf::VFGroupOp wrapInVFGroupOp(OpGroup& group)
@@ -196,7 +247,7 @@ ascvf::VFGroupOp wrapInVFGroupOp(OpGroup& group)
     ValueVector inputs = getInputLocalTensors(ops);
     ValueVector outputs = getOutputLocalTensors(ops);
 
-    auto fusedOp = builder.create<ascvf::VFGroupOp>(builder.getUnknownLoc(), outputs, inputs, group.groupType);
+    auto fusedOp = builder.create<ascvf::VFGroupOp>(builder.getUnknownLoc(), outputs, inputs, fuseGroupType(group));
     auto& block = fusedOp.getRegion().emplaceBlock();
 
     builder.setInsertionPointToEnd(&block);

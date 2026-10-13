@@ -20,23 +20,53 @@ include "mlir/Interfaces/CastInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/OpBase.td"
 
-def AscendC_DuplicateL0Op : VectorOp<"duplicate_l0", "Duplicate", [OpWithDstInterface]> {
+def AscendC_DuplicateL0Op : VectorOp<"duplicate_l0", "Duplicate", [OpWithDstInterface, OpWithSrcInterface]> {
     let description = "Duplicate elements from source tensor (L0 API)";
     let arguments = (ins AscendC_LocalTensor:$dst, AnyType:$scalar, AnyType:$mask,
                          AnyType:$repeatTimes, AnyType:$dstBlockStride,
                          AnyType:$dstRepeatStride, UnitAttr:$isSetMask);
+    let extraClassDeclaration = extraClassDeclarationBase # [{
+        SmallVector<Value> getSrcTensors() { 
+            SmallVector<Value> srcTensors;
+            Value tensor = getScalar();
+            if (isa<ascendc::LocalTensorType>(tensor.getType())) {
+                srcTensors.push_back(tensor);
+            }
+            return srcTensors;
+        }
+    }];
 }
 
-def AscendC_DuplicateL1Op : VectorOp<"duplicate_l1", "Duplicate", [OpWithDstInterface]> {
+def AscendC_DuplicateL1Op : VectorOp<"duplicate_l1", "Duplicate", [OpWithDstInterface, OpWithSrcInterface]> {
     let description = "Duplicate elements from source tensor (L1 API)";
     let arguments = (ins AscendC_LocalTensor:$dst, AnyType:$scalar, Variadic<UI64>:$mask,
                          AnyType:$repeatTimes, AnyType:$dstBlockStride,
                          AnyType:$dstRepeatStride, UnitAttr:$isSetMask);
+    let extraClassDeclaration = extraClassDeclarationBase # [{
+        SmallVector<Value> getSrcTensors() { 
+            SmallVector<Value> srcTensors;
+            Value tensor = getScalar();
+            if (isa<ascendc::LocalTensorType>(tensor.getType())) {
+                srcTensors.push_back(tensor);
+            }
+            return srcTensors;
+        }
+    }];
 }
 
-def AscendC_DuplicateL2Op : VectorOp<"duplicate_l2", "Duplicate", [OpWithDstInterface]> {
+def AscendC_DuplicateL2Op : VectorOp<"duplicate_l2", "Duplicate", [OpWithDstInterface, OpWithSrcInterface]> {
     let description = "Duplicate elements from source tensor (L2 API)";
     let arguments = (ins AscendC_LocalTensor:$dst, AnyType:$scalar,
                          AnyType:$calCount);
+    let extraClassDeclaration = extraClassDeclarationBase # [{
+        SmallVector<Value> getSrcTensors() { 
+            SmallVector<Value> srcTensors;
+            Value tensor = getScalar();
+            if (isa<ascendc::LocalTensorType>(tensor.getType())) {
+                srcTensors.push_back(tensor);
+            }
+            return srcTensors;
+        }
+    }];
 }
 #endif //ASC_BASIC_OP_DUPLICATE_TD

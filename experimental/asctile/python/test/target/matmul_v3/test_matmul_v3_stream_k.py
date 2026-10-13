@@ -11,7 +11,7 @@ from asc.experimental import asctile
 import pytest
 import torch
 
-from .helpers import xfail
+from . import Transpose
 
 
 @asctile.jit(reuse_alloc=2)
@@ -21,16 +21,16 @@ def mm3_streamk_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.GlobalAddres
                        n_L1: asctile.ConstExpr, k_L1: asctile.ConstExpr, base_m: asctile.ConstExpr,
                        base_n: asctile.ConstExpr, base_k: asctile.ConstExpr, sk_single_k: asctile.ConstExpr,
                        used_core_num: asctile.ConstExpr, quant_type: asctile.ConstExpr, enable_hf32: asctile.ConstExpr,
-                       has_bias: asctile.ConstExpr, double_buffering: asctile.ConstExpr,
-                       is_a_transpose: asctile.ConstExpr, is_b_transpose: asctile.ConstExpr):
-    if is_a_transpose:
-        k, m = a_shape
-    else:
+                       has_bias: asctile.ConstExpr, double_buffering: asctile.ConstExpr, a_transp: asctile.ConstExpr,
+                       b_transp: asctile.ConstExpr):
+    if a_transp == Transpose.NONE:
         m, k = a_shape
-    if is_b_transpose:
-        n = b_shape[0]
     else:
+        k, m = a_shape
+    if b_transp == Transpose.NONE:
         _, n = b_shape
+    else:
+        n, _ = b_shape
 
     m_tiles = asctile.ceildiv(m, m_L1)
     n_tiles = asctile.ceildiv(n, n_L1)
@@ -94,20 +94,20 @@ def mm3_streamk_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.GlobalAddres
                         acc = asctile.zeros_acc([base_m, base_n], dtype=asctile.float32)
                     for k_outer in range(asctile.ceildiv(k, k_L1), unroll_factor=k_l1_uf):
                         k_gm_off = k_outer * k_L1
-                        if not is_a_transpose:
+                        if a_transp == Transpose.NONE:
                             a_l1 = asctile.copy_in(a_gm, [m_gm_off, k_gm_off], [base_m, k_L1], "L1")
                         else:
                             a_l1 = asctile.copy_in(a_gm, [k_gm_off, m_gm_off], [k_L1, base_m], "L1")
-                        if not is_b_transpose:
+                        if b_transp == Transpose.NONE:
                             b_l1 = asctile.copy_in(b_gm, [k_gm_off, n_gm_off], [k_L1, base_n], "L1")
                         else:
                             b_l1 = asctile.copy_in(b_gm, [n_gm_off, k_gm_off], [base_n, k_L1], "L1")
                         for k_inner in range(asctile.ceildiv(k_L1, base_k), unroll_factor=k_l0_uf):
-                            if not is_a_transpose:
+                            if a_transp == Transpose.NONE:
                                 a_l0 = asctile.copy(a_l1, [0, k_inner * base_k], [base_m, base_k], "L0A")
                             else:
                                 a_l0 = asctile.copy(a_l1, [k_inner * base_k, 0], [base_k, base_m], "L0A").T
-                            if not is_b_transpose:
+                            if b_transp == Transpose.NONE:
                                 b_l0 = asctile.copy(b_l1, [k_inner * base_k, 0], [base_k, base_n], "L0B")
                             else:
                                 b_l0 = asctile.copy(b_l1, [0, k_inner * base_k], [base_n, base_k], "L0B").T
@@ -123,11 +123,11 @@ def mm3_streamk_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.GlobalAddres
                         k_steps = sk_single_k // base_k
                         for k_step in range(k_steps, unroll_factor=k_l0_uf):
                             k_off = k_start + k_step * base_k
-                            if not is_a_transpose:
+                            if a_transp == Transpose.NONE:
                                 a_l0 = asctile.copy_in(a_gm, [m_gm_off, k_off], [base_m, base_k], "L0A")
                             else:
                                 a_l0 = asctile.copy_in(a_gm, [k_off, m_gm_off], [base_k, base_m], "L0A").T
-                            if not is_b_transpose:
+                            if b_transp == Transpose.NONE:
                                 b_l0 = asctile.copy_in(b_gm, [k_off, n_gm_off], [base_k, base_n], "L0B")
                             else:
                                 b_l0 = asctile.copy_in(b_gm, [n_gm_off, k_off], [base_n, base_k], "L0B").T
@@ -135,11 +135,11 @@ def mm3_streamk_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.GlobalAddres
                         tail_k = sk_single_k % base_k
                         if tail_k > 0:
                             k_off = k_start + k_steps * base_k
-                            if not is_a_transpose:
+                            if a_transp == Transpose.NONE:
                                 a_l0 = asctile.copy_in(a_gm, [m_gm_off, k_off], [base_m, tail_k], "L0A")
                             else:
                                 a_l0 = asctile.copy_in(a_gm, [k_off, m_gm_off], [tail_k, base_m], "L0A").T
-                            if not is_b_transpose:
+                            if b_transp == Transpose.NONE:
                                 b_l0 = asctile.copy_in(b_gm, [k_off, n_gm_off], [tail_k, base_n], "L0B")
                             else:
                                 b_l0 = asctile.copy_in(b_gm, [n_gm_off, k_off], [base_n, tail_k], "L0B").T
@@ -149,11 +149,11 @@ def mm3_streamk_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.GlobalAddres
                         k_steps = sk_single_tail_k // base_k
                         for k_step in range(k_steps, unroll_factor=k_l0_uf):
                             k_off = k_start + k_step * base_k
-                            if not is_a_transpose:
+                            if a_transp == Transpose.NONE:
                                 a_l0 = asctile.copy_in(a_gm, [m_gm_off, k_off], [base_m, base_k], "L0A")
                             else:
                                 a_l0 = asctile.copy_in(a_gm, [k_off, m_gm_off], [base_k, base_m], "L0A").T
-                            if not is_b_transpose:
+                            if b_transp == Transpose.NONE:
                                 b_l0 = asctile.copy_in(b_gm, [k_off, n_gm_off], [base_k, base_n], "L0B")
                             else:
                                 b_l0 = asctile.copy_in(b_gm, [n_gm_off, k_off], [base_n, base_k], "L0B").T
@@ -161,11 +161,11 @@ def mm3_streamk_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.GlobalAddres
                         tail_k = sk_single_tail_k % base_k
                         if tail_k > 0:
                             k_off = k_start + k_steps * base_k
-                            if not is_a_transpose:
+                            if a_transp == Transpose.NONE:
                                 a_l0 = asctile.copy_in(a_gm, [m_gm_off, k_off], [base_m, tail_k], "L0A")
                             else:
                                 a_l0 = asctile.copy_in(a_gm, [k_off, m_gm_off], [tail_k, base_m], "L0A").T
-                            if not is_b_transpose:
+                            if b_transp == Transpose.NONE:
                                 b_l0 = asctile.copy_in(b_gm, [k_off, n_gm_off], [tail_k, base_n], "L0B")
                             else:
                                 b_l0 = asctile.copy_in(b_gm, [n_gm_off, k_off], [base_n, tail_k], "L0B").T
@@ -195,7 +195,7 @@ def mm3_streamk_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.GlobalAddres
             tail_index = v_mn_idx - main_row * main_group * n_tiles
             v_m_idx = main_row * main_group + tail_index % tail_group
             v_n_idx = (tail_index // tail_group) % n_tiles
-            v_row_idx = asctile.cast(main_row, asctile.int32)
+            v_row_idx = v_m_idx // main_group
         if v_row_idx % 2 != 0:
             v_n_idx = n_tiles - 1 - v_n_idx
         m_per_vec_unit = asctile.ceildiv(m_L1, sk_k_tiles * task_ration)
@@ -229,70 +229,72 @@ def mm3_streamk_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.GlobalAddres
                 asctile.copy_out(sum_tile.to(quant_type), c_gm, [v_m_gm_off, v_n_gm_off])
 
 
-test_param_str = "core_num, tiling_data, dtype, is_a_transpose, is_b_transpose, enable_hf32_mode, has_bias, double_buffering, input_range"
+test_param_str = "core_num, tiling_data, dtype, a_transp, b_transp, has_bias, double_buffering"
 test_cases = [
-    (36, (4, 128, 8192, 16, 128, 256, 16, 128, 128, 228), torch.float16, False, True, False, False, (1, 1, 1, 2, 2),
-     (-1, 1)),
-    (36, (1, 1152, 6912, 16, 240, 256, 16, 240, 64, 988), torch.float16, False, False, False, False, (1, 1, 1, 2, 2),
-     (-1, 1)),
-    (36, (231, 1280, 5120, 240, 256, 256, 240, 256, 64, 732), torch.float16, False, True, False, True, (1, 1, 1, 2, 2),
-     (-1, 1)),
-    (36, (16, 640, 12288, 16, 224, 256, 16, 224, 64, 1024), torch.float16, False, True, False, False, (1, 1, 1, 2, 2),
-     (-1, 1)),
-    (36, (640, 16, 12288, 224, 16, 256, 224, 16, 64, 1024), torch.float16, False, True, False, False, (1, 1, 1, 2, 2),
-     (-1, 1)),
-    (36, (4, 1024, 8192, 16, 256, 256, 16, 256, 64, 911), torch.float16, False, True, False, False, (1, 1, 1, 2, 2),
-     (-1, 1)),
-    (36, (32, 1152, 7680, 32, 240, 128, 32, 240, 64, 1098), torch.float16, True, False, False, False, (1, 1, 1, 2, 2),
-     (-1, 1)),
-    (36, (32, 2112, 7168, 32, 240, 256, 32, 240, 64, 1792), torch.float16, False, False, False, True, (1, 1, 1, 2, 2),
-     (-1, 1)),
-    (36, (64, 2112, 7168, 64, 240, 256, 64, 240, 64, 1792), torch.float16, False, False, False, True, (1, 1, 1, 2, 2),
-     (-1, 1)),
-    (36, (16, 2304, 7168, 16, 256, 256, 16, 256, 64, 1792), torch.float16, False, False, False, True, (1, 1, 1, 2, 2),
-     (-1, 1)),
-    (36, (4, 3584, 8192, 16, 208, 256, 16, 208, 64, 4096), torch.float16, False, True, False, False, (1, 1, 1, 2, 2),
-     (-1, 1)),
-    (36, (4096, 256, 7168, 240, 256, 256, 240, 256, 64, 3584), torch.bfloat16, False, True, False, False, (1, 1, 1, 2,
-                                                                                                           2), (-1, 1)),
-    (36, (4096, 128, 8192, 240, 128, 256, 240, 128, 64, 4096), torch.float16, False, True, False, False, (1, 1, 1, 2,
-                                                                                                          2), (-1, 1)),
-    (36, (2048, 1280, 10240, 256, 256, 256, 256, 256, 64, 1138), torch.float16, False, False, False, False,
-     (1, 1, 1, 2, 2), (-1, 1)),
-    (36, (120, 4096, 10240, 128, 240, 256, 128, 240, 64, 5120), torch.float16, False, True, False, False, (1, 1, 1, 2,
-                                                                                                           2), (-1, 1)),
-    (36, (4096, 1280, 8192, 256, 256, 256, 256, 256, 64, 2048), torch.bfloat16, False, True, False, False,
-     (1, 1, 1, 2, 2), (-1, 1)),
-    (36, (4096, 1280, 10240, 256, 256, 256, 256, 256, 64, 2560), torch.float16, False, False, False, False,
-     (1, 1, 1, 2, 2), (-1, 1)),
-    pytest.param(36, (448, 256, 384000, 224, 256, 64, 224, 256, 32, 21334), torch.float32, True, False, True, False,
-                 (1, 1, 1, 2, 2), (-1, 1), marks=xfail("Accuracy mismatch", compile_ok=True)),
-    pytest.param(36, (16640, 10240, 4096, 256, 256, 256, 256, 256, 64, 1024), torch.float16, False, False, False, False,
-                 (1, 1, 1, 2, 2), (-1, 1), marks=xfail("Accuracy mismatch", compile_ok=True)),
-    (36, (4096, 129280, 7168, 256, 256, 256, 256, 256, 64, 3584), torch.bfloat16, False, True, False, False,
-     (1, 1, 1, 2, 2), (-1, 1)),
+    (None, (4, 128, 8192, 16, 128, 256, 16, 128, 128, 228), torch.float16, Transpose.NONE, Transpose.L0, False,
+     (1, 1, 1, 2, 2)),
+    (None, (1, 1152, 6912, 16, 240, 256, 16, 240, 64, 988), torch.float16, Transpose.NONE, Transpose.NONE, False,
+     (1, 1, 1, 2, 2)),
+    (None, (231, 1280, 5120, 240, 256, 256, 240, 256, 64, 732), torch.float16, Transpose.NONE, Transpose.L0, True,
+     (1, 1, 1, 2, 2)),
+    (None, (16, 640, 12288, 16, 224, 256, 16, 224, 64, 1024), torch.float16, Transpose.NONE, Transpose.L0, False,
+     (1, 1, 1, 2, 2)),
+    (None, (640, 16, 12288, 224, 16, 256, 224, 16, 64, 1024), torch.float16, Transpose.NONE, Transpose.L0, False,
+     (1, 1, 1, 2, 2)),
+    (None, (4, 1024, 8192, 16, 256, 256, 16, 256, 64, 911), torch.float16, Transpose.NONE, Transpose.L0, False,
+     (1, 1, 1, 2, 2)),
+    (None, (32, 1152, 7680, 32, 240, 128, 32, 240, 64, 1098), torch.float16, True, Transpose.NONE, Transpose.NONE,
+     (1, 1, 1, 2, 2)),
+    (None, (32, 2112, 7168, 32, 240, 256, 32, 240, 64, 1792), torch.float16, False, Transpose.NONE, Transpose.L0,
+     (1, 1, 1, 2, 2)),
+    (None, (64, 2112, 7168, 64, 240, 256, 64, 240, 64, 1792), torch.float16, False, Transpose.NONE, Transpose.L0,
+     (1, 1, 1, 2, 2)),
+    (None, (16, 2304, 7168, 16, 256, 256, 16, 256, 64, 1792), torch.float16, False, Transpose.NONE, Transpose.L0,
+     (1, 1, 1, 2, 2)),
+    (None, (4, 3584, 8192, 16, 208, 256, 16, 208, 64, 4096), torch.float16, Transpose.NONE, Transpose.L0, False,
+     (1, 1, 1, 2, 2)),
+    (None, (4096, 256, 7168, 240, 256, 256, 240, 256, 64, 3584), torch.bfloat16, Transpose.NONE, Transpose.L0, False,
+     (1, 1, 1, 2, 2)),
+    (None, (4096, 128, 8192, 240, 128, 256, 240, 128, 64, 4096), torch.float16, Transpose.NONE, Transpose.L0, False,
+     (1, 1, 1, 2, 2)),
+    (None, (2048, 1280, 10240, 256, 256, 256, 256, 256, 64, 1138), torch.float16, Transpose.NONE, Transpose.NONE, False,
+     (1, 1, 1, 2, 2)),
+    (None, (120, 4096, 10240, 128, 240, 256, 128, 240, 64, 5120), torch.float16, Transpose.NONE, Transpose.L0, False,
+     (1, 1, 1, 2, 2)),
+    (None, (4096, 1280, 8192, 256, 256, 256, 256, 256, 64, 2048), torch.bfloat16, Transpose.NONE, Transpose.L0, False,
+     (1, 1, 1, 2, 2)),
+    (None, (4096, 1280, 10240, 256, 256, 256, 256, 256, 64, 2560), torch.float16, Transpose.NONE, Transpose.NONE, False,
+     (1, 1, 1, 2, 2)),
+    (None, (448, 256, 384000, 224, 256, 64, 224, 256, 32, 21334), torch.float32, True, Transpose.NONE, Transpose.NONE,
+     (1, 1, 1, 2, 2)),
+    (None, (16640, 10240, 4096, 256, 256, 256, 256, 256, 64, 1024), torch.float16, Transpose.NONE, Transpose.NONE,
+     False, (1, 1, 1, 2, 2)),
+    (None, (4096, 129280, 7168, 256, 256, 256, 256, 256, 64, 3584), torch.bfloat16, Transpose.NONE, Transpose.L0, False,
+     (1, 1, 1, 2, 2)),
 ]
 
 
 @pytest.mark.parametrize(test_param_str, test_cases,
                          ids=["_".join(map(str,
                                            getattr(tc, "values", tc)[1][:3])) for tc in test_cases])
-def test_streamk_matmul(profiler, runs, core_num, tiling_data, dtype, is_a_transpose, is_b_transpose, enable_hf32_mode,
-                        has_bias, double_buffering, input_range):
+def test_streamk_matmul(profiler, runs, core_num, tiling_data, dtype, a_transp, b_transp, has_bias, double_buffering):
     quant_type = asctile.float32
     if dtype == torch.float16:
         quant_type = asctile.float16
     elif dtype == torch.bfloat16:
         quant_type = asctile.bfloat16
     m, n, k, m_L1, n_L1, k_L1, base_m, base_n, base_k, sk_single_k = tiling_data
-    low, high = input_range
-    a_shape = (m, k) if not is_a_transpose else (k, m)
-    b_shape = (k, n) if not is_b_transpose else (n, k)
+    enable_hf32_mode = dtype == torch.float32
+    low, high = (-1, 1) if not enable_hf32_mode else (0, 1)
+    a_shape = (m, k) if a_transp == Transpose.NONE else (k, m)
+    b_shape = (k, n) if b_transp == Transpose.NONE else (n, k)
     a = (high - low) * torch.rand(a_shape, dtype=dtype) + low
     b = (high - low) * torch.rand(b_shape, dtype=dtype) + low
     c = torch.zeros((m, n), dtype=dtype)
     bias = (high - low) * torch.rand([n], dtype=dtype) + low
 
+    if core_num is None:
+        core_num = 36
     m_tiles = asctile.ceildiv(m, m_L1)
     n_tiles = asctile.ceildiv(n, n_L1)
     total_mn_tiles = m_tiles * n_tiles
@@ -305,13 +307,14 @@ def test_streamk_matmul(profiler, runs, core_num, tiling_data, dtype, is_a_trans
         for _ in range(runs):
             mm3_streamk_kernel[core_num](a, b, c, bias, workspace, a.shape, b.shape, m_L1, n_L1, k_L1, base_m, base_n,
                                          base_k, sk_single_k, core_num, quant_type, enable_hf32_mode, has_bias,
-                                         double_buffering, is_a_transpose, is_b_transpose)
-    if is_a_transpose:
+                                         double_buffering, a_transp, b_transp)
+    if a_transp != Transpose.NONE:
         a = a.T
-    if is_b_transpose:
+    if b_transp != Transpose.NONE:
         b = b.T
     c_ref = a.to(torch.float32) @ b.to(torch.float32)
     if has_bias:
         c_ref = c_ref + bias
     c_ref = c_ref.to(dtype)
-    torch.testing.assert_close(c, c_ref, atol=1e-3, rtol=1e-3)
+    atol, rtol = (1e-3, 1e-3)
+    torch.testing.assert_close(c, c_ref, atol=atol, rtol=rtol)

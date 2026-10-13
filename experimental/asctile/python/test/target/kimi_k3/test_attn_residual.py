@@ -12,10 +12,8 @@ from asc.experimental import asctile
 import pytest
 import torch
 
-from ..helpers import xfail
 
-
-@asctile.jit(reuse_alloc=1)
+@asctile.jit(reuse_alloc=2)
 def attn_residual_kernel(prefix_ptr: asctile.GlobalAddress, bank_ptr: asctile.GlobalAddress,
                          combined_weight_ptr: asctile.GlobalAddress, indices_ptr: asctile.GlobalAddress,
                          output_ptr: asctile.GlobalAddress, num_tokens, num_valid_blocks,
@@ -110,14 +108,14 @@ def run_attn_residual_test(profiler, runs, num_tokens, num_valid_blocks, hidden_
 
 @pytest.mark.parametrize("num_tokens, num_valid_blocks, hidden_size, unroll_factor", [
     # fla (L, B, T, D) → (num_tokens=B*T, num_valid_blocks=L-1, hidden_size=D)
-    pytest.param(1000, 2, 4096, 2, marks=xfail("UB overflow", compile_ok=False)),  # L=3
-    pytest.param(15, 14, 4096, 2, marks=xfail("UB overflow", compile_ok=False)),  # T=15
+    (1000, 2, 4096, 2),  # L=3
+    (15, 14, 4096, 2),  # T=15
     (1000, 6, 1000, 2),  # D=1000
     (1000, 6, 2000, 2),  # D=2000
-    pytest.param(5000, 28, 4096, 2, marks=xfail("UB overflow", compile_ok=False)),  # L=29 + B=5
-    pytest.param(5000, 14, 7186, 2, marks=xfail("UB overflow", compile_ok=False)),  # B=5 + D=7186
-    pytest.param(189, 28, 7186, 2, marks=xfail("UB overflow", compile_ok=False)),  # L=29 + D=7186 + T=63
-    pytest.param(16000, 9, 4096, 2, marks=xfail("UB overflow", compile_ok=False)),  # L=10, B=2, T=8000
+    (5000, 28, 4096, 2),  # L=29 + B=5
+    (5000, 14, 7186, 2),  # B=5 + D=7186
+    (189, 28, 7186, 2),  # L=29 + D=7186 + T=63
+    (16000, 9, 4096, 2),  # L=10, B=2, T=8000
     # pypto: b=2, t=4096, n=25, d=512 → num_tokens = 2*4096 = 8192
     (8192, 25, 512, 2),
     # pypto: b=1, t=1023, n=32, d=512 → num_tokens = 1*1023 = 1023

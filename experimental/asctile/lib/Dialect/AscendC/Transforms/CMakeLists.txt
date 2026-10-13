@@ -17,6 +17,7 @@ add_mlir_dialect_library(AscTileAscendCTransforms
   InsertBiasBufIdSync.cpp
   InsertBufIdSync.cpp
   InsertCrossCoreSync.cpp
+  InsertCrossCoreSyncGM.cpp
   InsertInitDump.cpp
   InsertSubBlockGuard.cpp
   LowerToL0.cpp

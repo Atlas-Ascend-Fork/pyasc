@@ -18,10 +18,10 @@ class TestGlobalTensor:
         @jit_test
         def kernel(x_ptr: asctile.GlobalAddress):
             x_gm = asctile.global_tensor(x_ptr, [64, 128])
-            assert x_gm.rank == 2
-            assert x_gm.shape.is_static()
-            assert len(x_gm.shape) == 2
-            assert list(x_gm.shape) == [64, 128]
+            asctile.static_assert(x_gm.rank == 2)
+            asctile.static_assert(x_gm.shape.is_static())
+            asctile.static_assert(len(x_gm.shape) == 2)
+            asctile.static_assert(list(x_gm.shape) == [64, 128])
 
         kernel[1](MockTensor(asctile.float32))
         assert mock_launch.call_count == 1
@@ -31,9 +31,9 @@ class TestGlobalTensor:
         @jit_test
         def kernel(x_ptr: asctile.GlobalAddress, n: int):
             x_gm = asctile.global_tensor(x_ptr, [n, 128])
-            assert not x_gm.shape.is_static()
-            assert x_gm.shape.is_dynamic_dim(0)
-            assert not x_gm.shape.is_dynamic_dim(1)
+            asctile.static_assert(not x_gm.shape.is_static())
+            asctile.static_assert(x_gm.shape.is_dynamic_dim(0))
+            asctile.static_assert(not x_gm.shape.is_dynamic_dim(1))
 
         kernel[1](MockTensor(asctile.float32), MockValue(asctile.int32))
         assert mock_launch.call_count == 1

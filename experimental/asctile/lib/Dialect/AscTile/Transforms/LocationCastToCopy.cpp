@@ -10,7 +10,6 @@
 
 #include "asctile/Dialect/AscTile/IR/AscTile.h"
 #include "asctile/Dialect/AscTile/Transforms/Passes.h"
-#include "asctile/Dialect/AscTile/Utils/Attributes.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -45,7 +44,7 @@ struct CastToCopy : OpRewritePattern<tensor::CastOp> {
         auto dstLoc = cast<LocalTensorType>(type).getLoc();
         Value zero = rewriter.create<arith::ConstantIntOp>(op.getLoc(), 0L, 32U);
         SmallVector<Value, 2> offsets{static_cast<size_t>(type.getRank()), zero};
-        rewriter.replaceOpWithNewOp<asctile::CopyOp>(op, type, base, offsets);
+        rewriter.replaceOpWithNewOp<asctile::CopyOp>(op, type, base, offsets, DistribModeAttr{});
         return success();
     }
 };

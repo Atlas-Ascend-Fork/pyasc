@@ -100,17 +100,50 @@ def SelectRegOp : RegOp<"select_reg", "Select"> {
                        AscendC_RegTensor:$src1Reg, AscendC_MaskReg:$maskReg);
 }
 
-def DataCopyLoadOp : RegOp<"data_copy_vld_reg", "DataCopy"> {
+def CompareScalarRegOp : RegOp<"compare_scalar_reg", "CompareScalar"> {
+  let arguments = (ins AscendC_MaskReg:$dstReg, AscendC_RegTensor:$srcReg,
+                       AnyType:$scalar, AscendC_MaskReg:$maskReg, 
+                       AscendC_CMPMODEAttr:$cmpMode);
+}
+
+def DataCopyLoadOp : RegOp<"data_copy_vld_reg", "LoadAlign"> {
   let description = "Perform copying between tensors (UB to RegTensor)";
-  let arguments = (ins AscendC_RegTensor:$dstReg,
+  let arguments = (ins AnyTypeOf<[AscendC_MaskReg, AscendC_RegTensor]>:$dstReg,
                        AnyRankedOrUnrankedMemRef:$src, AscendC_LoadDist:$dist);
 }
 
-def DataCopyStoreOp : RegOp<"data_copy_vst_reg", "DataCopy"> {
+def DataCopyStoreOp : RegOp<"data_copy_vst_reg", "StoreAlign"> {
   let description = "Perform copying between tensors (RegTensor to UB)";
   let arguments = (ins AnyRankedOrUnrankedMemRef:$dst,
-                       AscendC_RegTensor:$srcReg,
+                       AnyTypeOf<[AscendC_MaskReg, AscendC_RegTensor]>:$srcReg,
                        AscendC_MaskReg:$maskReg, AscendC_StoreDist:$dist);
+}
+
+def LoadUnAlignOp : RegOp<"vld_unalign_reg", "LoadUnAlign", [AscFunc]> {
+  let arguments = (ins AscendC_RegTensor:$dstReg, AscendC_UnalignReg: $ureg,
+                       AnyRankedOrUnrankedMemRef:$src);
+}
+
+def LoadUnAlignPreOp : RegOp<"vld_unalign_pre_reg", "LoadUnAlignPre", [AscFunc]> {
+  let arguments = (ins AscendC_UnalignReg: $ureg,
+                       AnyRankedOrUnrankedMemRef:$src);
+}
+
+def StoreUnAlignOp : RegOp<"vst_unalign_reg", "StoreUnAlign", [AscFunc]> {
+  let arguments = (ins AnyRankedOrUnrankedMemRef:$dst,
+                       AnyType:$srcReg,
+                       AscendC_UnalignReg:$ureg);
+}
+
+def StoreUnAlignPostOp : RegOp<"vst_unalign_post_reg", "StoreUnAlignPost", [AscFunc]> {
+  let arguments = (ins AnyRankedOrUnrankedMemRef:$dst,
+                       AscendC_UnalignReg:$ureg);
+}
+
+def MaskGenWithRegTensorOp : RegOp<"mask_gen_with_reg_tensor", "MaskGenWithRegTensor"> {
+  let description = "Transform RegTensor to MaskReg";
+  let arguments = (ins AscendC_MaskReg:$dst,
+                       AscendC_RegTensor:$srcReg, TypeAttr:$type);
 }
 
 def UpdateMaskOp : RegOp<"update_mask", "UpdateMask"> {
@@ -132,17 +165,20 @@ def RegTensorOp : RegOp<"reg_tensor", "RegTensor"> {
   let hasCanonicalizeMethod = 1;
 }
 
+def UnalignRegOp : RegOp<"unalign_reg", "UnalignReg", [AscFunc]> {
+  let results = (outs AscendC_UnalignReg:$result);
+  let assemblyFormat = "attr-dict `:` type($result)";
+}
+
 def LocalMemBarOp : RegOp<"local_mem_bar", "LocalMemBar"> {
   let arguments = (ins AscendC_MemType:$src, AscendC_MemType:$dst);
   let assemblyFormat = "$src `,` $dst attr-dict";
 }
 
-def MaskRegOp : RegOp<"mask_reg", "MaskReg"> {
+def MaskRegOp : RegOp<"mask_reg", "MaskReg", [AscFunc]> {
   let summary = "Create RegTensor";
   let results = (outs AscendC_MaskReg:$result);
-  let assemblyFormat = [{
-    attr-dict `:` type($result)
-  }];
+  let assemblyFormat = "attr-dict `:` type($result)";
 }
 
 def CreateMaskOp : RegOp<"create_mask", "CreateMask", [Pure]> {

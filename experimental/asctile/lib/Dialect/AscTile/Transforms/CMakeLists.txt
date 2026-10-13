@@ -7,7 +7,9 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 
 add_mlir_dialect_library(AscTileTransforms
+  ApplyCVStrategy.cpp
   ApplyHomomorphism.cpp
+  CombineExtractSlice.cpp
   CubeTransposeToLoad.cpp
   DetectBiasLoad.cpp
   FoldCast.cpp
@@ -17,6 +19,7 @@ add_mlir_dialect_library(AscTileTransforms
   MarkMatmulAccWithBias.cpp
   MarkReuseSource.cpp
   MergeCVGroups.cpp
+  PrepareCVStrategy.cpp
   PromotePureOps.cpp
   ResolveAutoLocation.cpp
   SplitCubeLoad.cpp

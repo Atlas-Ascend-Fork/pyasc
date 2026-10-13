@@ -356,9 +356,10 @@ class FunctionVisitor(ast.NodeVisitor):
             self.raise_unsupported(node, "Nested functions are not supported")
         if not self.state.inside_function and not isinstance(node, ast.FunctionDef):
             raise RuntimeError(f"JIT compilation is applicable to functions only, got {node.__class__.__name__} node")
+        builder = global_builder.get_ir_builder()
+        old_loc = builder.get_loc()
         if hasattr(node, "lineno") and hasattr(node, "col_offset"):
-            global_builder.get_ir_builder().set_loc(self.location.filename, self.location.line_offset + node.lineno,
-                                                    node.col_offset)
+            builder.set_loc(self.location.filename, self.location.line_offset + node.lineno, node.col_offset + 1)
         try:
             return super().visit(node)
         except CodegenError:
@@ -367,10 +368,10 @@ class FunctionVisitor(ast.NodeVisitor):
             if self.options.capture_exceptions:
                 raise CodegenError(node, self.src, f"{e.__class__.__name__}: {e}") from e
             raise
+        finally:
+            builder.set_loc(old_loc)
 
     def visit_arguments(self, node: ast.arguments) -> Tuple[List[str], str]:
-        if node.defaults or node.kw_defaults:
-            self.raise_unsupported(node, "Default values for function arguments are not supported")
         if node.posonlyargs:
             self.raise_unsupported(node, "Positional-only arguments are not supported")
         if node.kwonlyargs:
@@ -678,21 +679,18 @@ class FunctionVisitor(ast.NodeVisitor):
             builder.set_insertion_point_to_start(else_block)
             else_value = materialize_ir_value(self.visit(node.orelse))
             builder.restore_insertion_point(insert_point)
-            if then_value.dtype != else_value.dtype:
+            ret_type = then_value.to_ir().get_type()
+            if ret_type != else_value.to_ir().get_type():
                 self.raise_unsupported(
-                    node,
-                    f"Conditional operator has inconsistent result types: {then_value.dtype} / {else_value.dtype}")
-            ret_type = then_value.dtype
-            if not ret_type.is_numeric():
-                self.raise_unsupported(node, f"Conditional operator must have numeric result type, got {ret_type}")
-            op = builder.create_scf_IfOp(cond.to_ir(), [ret_type.to_ir()], with_else=True)
+                    node, f"Conditional operator has inconsistent result types: {then_value!r} / {else_value!r}")
+            op = builder.create_scf_IfOp(cond.to_ir(), [ret_type], with_else=True)
             then_block.merge_block_before(op.get_then_block())
             builder.set_insertion_point_to_end(op.get_then_block())
             builder.create_scf_YieldOp([then_value.to_ir()])
             else_block.merge_block_before(op.get_else_block())
             builder.set_insertion_point_to_end(op.get_else_block())
             builder.create_scf_YieldOp([else_value.to_ir()])
-            return PlainValue(op.get_result(0))
+            return then_value.from_ir(op.get_result(0))
 
     def visit_JoinedStr(self, node: ast.JoinedStr) -> str:
         values = (self.visit(value) for value in node.values)
