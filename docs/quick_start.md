@@ -250,6 +250,7 @@ pyasc支持通过pip快速安装和基于源码编译安装两种方式。
 pip install pyasc
 ```
 二进制wheel安装包支持CPython 3.9-3.12。
+pyasc 的 pip 发行包名为 `pyasc`，安装、升级、卸载以及 `pip list` 均使用该名称；安装后的 Python 导入包为 `asc`，代码中使用 `import asc`。
 
 ### ⚡ pyasc基于源码安装
 
