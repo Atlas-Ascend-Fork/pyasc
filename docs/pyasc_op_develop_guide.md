@@ -101,12 +101,12 @@
    def vadd_kernel(x: asc.GlobalAddress, y: asc.GlobalAddress, z: asc.GlobalAddress, block_length: int):
        # 获取当前核的索引，计算数据偏移
        offset = asc.get_block_idx() * block_length
-       
+
        # 创建 GlobalTensor 管理全局内存地址
        x_gm = asc.GlobalTensor()
        y_gm = asc.GlobalTensor()
        z_gm = asc.GlobalTensor()
-       
+
        # 设置 Global Memory 起始地址和长度
        x_gm.set_global_buffer(x + offset, block_length)
        y_gm.set_global_buffer(y + offset, block_length)
@@ -139,7 +139,7 @@
            asc.wait_flag(asc.HardEvent.MTE2_V, buf_id)
 
            # Step 2: 计算 - 执行矢量加法
-           asc.add(z_local[buf_id * tile_length:], x_local[buf_id * tile_length:], 
+           asc.add(z_local[buf_id * tile_length:], x_local[buf_id * tile_length:],
                    y_local[buf_id * tile_length:], tile_length)
 
            # 同步：等待 V_MTE3 事件，确保计算完成
@@ -198,10 +198,6 @@
    import logging
    import argparse
    import torch
-   try:
-       import torch_npu
-   except ModuleNotFoundError:
-       pass
 
    import asc
    import asc.runtime.config as config
@@ -241,7 +237,7 @@
            asc.set_flag(asc.HardEvent.MTE2_V, buf_id)
            asc.wait_flag(asc.HardEvent.MTE2_V, buf_id)
 
-           asc.add(z_local[buf_id * tile_length:], x_local[buf_id * tile_length:], 
+           asc.add(z_local[buf_id * tile_length:], x_local[buf_id * tile_length:],
                    y_local[buf_id * tile_length:], tile_length)
 
            asc.set_flag(asc.HardEvent.V_MTE3, buf_id)

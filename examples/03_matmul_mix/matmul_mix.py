@@ -10,10 +10,6 @@ from typing import Tuple
 import logging
 import argparse
 import torch
-try:
-    import torch_npu
-except ModuleNotFoundError:
-    pass
 
 import asc
 import asc.runtime.config as config
@@ -111,7 +107,6 @@ def matmul_mix_custom(backend: config.Backend, platform: config.Platform):
     device = "npu" if config.Backend(backend) == config.Backend.NPU else "cpu"
     a = torch.randint(-5, 5, (m, k), device=device).to(torch.float16)
     b = torch.randint(-5, 5, (k, n), device=device).to(torch.float16)
-    bias = torch.randint(-5, 5, (1, n), device=device).to(torch.float32)
     matmul = torch.matmul(a.to(torch.float32), b.to(torch.float32)).to(torch.float32)
     tiling = generate_tiling(m, n, k)
     c = matmul_launch(a, b, tiling, device)

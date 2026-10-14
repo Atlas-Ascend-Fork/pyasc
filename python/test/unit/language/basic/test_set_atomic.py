@@ -8,7 +8,6 @@
 
 import asc
 from asc.runtime import config
-from asc.runtime.jit import MockTensor
 
 
 def setup_function():

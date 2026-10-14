@@ -55,8 +55,8 @@ def compute(global_pipe: asc.TPipe, i: int, z_gm: asc.GlobalTensor, x_gm: asc.Gl
     y_local = in_queue_y.alloc_tensor(y_gm.dtype)
     z_local = out_queue_z.alloc_tensor(z_gm.dtype)
 
-    z_gm_addr = z_gm.get_phy_addr()
-    x_local_addr = x_local.get_phy_addr()
+    _ = z_gm.get_phy_addr()
+    _ = x_local.get_phy_addr()
     x_local.set_buffer_len(tile_length * 4)
     x_local.set_size(tile_length)
 
@@ -69,8 +69,8 @@ def compute(global_pipe: asc.TPipe, i: int, z_gm: asc.GlobalTensor, x_gm: asc.Gl
     global_pipe.release_event_id(id=eventid1, event=asc.HardEvent.MTE2_V)
 
     src_pos = x_local.get_position()
-    x_len = x_local.get_length()
-    x_size = x_local.get_size()
+    _ = x_local.get_length()
+    _ = x_local.get_size()
 
     x_tag = 13  # set custom tag
     x_local.set_user_tag(x_tag)
@@ -90,7 +90,7 @@ def compute(global_pipe: asc.TPipe, i: int, z_gm: asc.GlobalTensor, x_gm: asc.Gl
     asc.data_copy(z_gm[i * tile_length:], z_local, count=tile_length)
 
     new_tmp.set_addr_with_offset(tmp_local, 16)
-    new_size = new_tmp.get_size()
+    _ = new_tmp.get_size()
 
     in_queue_x.free_tensor(x_local)
     in_queue_y.free_tensor(y_local)

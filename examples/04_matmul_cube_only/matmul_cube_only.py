@@ -10,10 +10,6 @@ from typing import Tuple
 import logging
 import argparse
 import torch
-try:
-    import torch_npu
-except ModuleNotFoundError:
-    pass
 
 import asc
 import asc.runtime.config as config

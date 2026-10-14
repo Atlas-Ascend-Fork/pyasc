@@ -12,7 +12,7 @@ import pytest
 
 import asc
 from asc.codegen.errors import CodegenError
-from asc.runtime.jit import JITFunction, MockTensor
+from asc.runtime.jit import MockTensor
 
 
 @pytest.fixture(autouse=True)

@@ -11,10 +11,6 @@ import subprocess
 from pathlib import Path
 
 import torch
-try:
-    import torch_npu
-except ModuleNotFoundError:
-    pass
 
 import asc.runtime.config as config
 import asc.lib.runtime as rt
@@ -47,6 +43,7 @@ def run_ascendc(shape, warmup, iters):
 
 
 def run_torch_npu(shape, warmup, iters):
+    import torch_npu
     x = torch.empty((shape[0], shape[1], shape[2] * 2), dtype=torch.float32, device="npu")
     for _ in range(warmup + iters):
         torch_npu.npu_swiglu(x, dim=-1)

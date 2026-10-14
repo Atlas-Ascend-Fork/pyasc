@@ -123,7 +123,7 @@ msprof op工具包含msprof op（上板）和msprof op simulator（仿真）两�
 
 add算子实现代码参考[02_add_framework.py](../examples/02_add_framework/add_framework.py),
 
-#### 上板性能数据采集 
+#### 上板性能数据采集
 
 算子上板信息采集，参考命令如下，详细命令参数请参考msprof op工具文档的说明。
 ```Shell
@@ -158,7 +158,7 @@ msprof op simulator --output=./output python add_framework.py -r Model -v Ascend
 ```
  成功执行后在output目录下生成如下文件：
 ```
-OPPROF_{timestamp}_XXX 
+OPPROF_{timestamp}_XXX
 ├── dump
 └── simulator
     ├── core0.veccore0       // 按照core*.veccore*或core*.cubecore*目录存放各核的数据文件
@@ -275,10 +275,7 @@ pyasc的环境准备请参考[quick_start.md](quick_start.md#envready)，Ascend 
 
 ```Python
 import torch
-try:
-    import torch_npu
-except ModuleNotFoundError:
-    pass
+import torch_npu
 
 import asc
 import asc.runtime.config as config
@@ -334,7 +331,7 @@ with torch_npu.profiler.profile(
         torch_npu.profiler.ProfilerActivity.CPU,
         torch_npu.profiler.ProfilerActivity.NPU
         ],
-    schedule=torch_npu.profiler.schedule(wait=0, warmup=1, active=1, repeat=1, skip_first=0),    
+    schedule=torch_npu.profiler.schedule(wait=0, warmup=1, active=1, repeat=1, skip_first=0),
     on_trace_ready=torch_npu.profiler.tensorboard_trace_handler("./result"),
     record_shapes=False,
     profile_memory=False,
@@ -345,7 +342,7 @@ with torch_npu.profiler.profile(
     steps = 2
     for step in range(steps):
         vadd_custom(config.Backend.NPU)
-        prof.step()    
+        prof.step()
 
 ```
 
@@ -354,11 +351,11 @@ with torch_npu.profiler.profile(
 执行后生成数据目录结构示例如下：
 
 ```
-├── ubuntu_239247_20251101101435_ascend_pt                
-    ├── ASCEND_PROFILER_OUTPUT          
+├── ubuntu_239247_20251101101435_ascend_pt
+    ├── ASCEND_PROFILER_OUTPUT
     ├── FRAMEWORK
-    ├── logs                     
-    ├── PROF_000001_20230628101435646_FKFLNPEPPRRCFCBA  
+    ├── logs
+    ├── PROF_000001_20230628101435646_FKFLNPEPPRRCFCBA
     ├── profiler_info.json
     ├── profiler_metadata.json
 ```
