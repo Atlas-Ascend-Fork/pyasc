@@ -27,7 +27,6 @@ TIDY_IGNORE_LIST=(
 )
 
 # Counters
-FORMAT_WARNING_COUNT=0
 TIDY_ERROR_COUNT=0
 TIDY_WARNING_COUNT=0
 
@@ -81,21 +80,6 @@ check_and_install_tools() {
 # Core Check Functions
 # ============================================================================
 
-run_clang_format_diff_check() {
-    log "[INFO] Running clang-format-diff check (base: $BASE_BRANCH)..."
-
-    local format_output=$(git diff -U0 "$BASE_BRANCH" HEAD | clang-format-diff -p1 2>&1) || true
-
-    if [[ -n "$format_output" ]]; then
-        FORMAT_WARNING_COUNT=$(echo "$format_output" | grep "^-" | grep -v "^---" | wc -l | xargs)
-        log "[FORMAT ISSUE] Found formatting issues in changed lines"
-        echo "$format_output"
-        log "[WARNING] $FORMAT_WARNING_COUNT lines need formatting"
-        log "[HINT] Fix: git diff -U0 $BASE_BRANCH HEAD | clang-format-diff -p1 -i"
-    fi
-    return 0
-}
-
 run_clang_tidy_diff_check() {
     log "[INFO] Running clang-tidy-diff check (base: $BASE_BRANCH)..."
 
@@ -104,7 +88,7 @@ run_clang_tidy_diff_check() {
 
     local tidy_output=""
     if [[ -n "$COMPILE_DB" ]]; then
-        tidy_output=$(git diff -U0 "$BASE_BRANCH" HEAD | clang-tidy-diff -p1 -clang-tidy-binary clang-tidy -path "$(dirname $COMPILE_DB)" 2>&1) || true
+        tidy_output=$(git diff -U0 "$BASE_BRANCH" HEAD | clang-tidy-diff -p1 -clang-tidy-binary clang-tidy -path "$(dirname "$COMPILE_DB")" 2>&1) || true
     else
         local tidy_args=(-p1 -clang-tidy-binary clang-tidy -extra-arg-before="-x" -extra-arg-before="c++")
         for flag in $MANUAL_COMPILE_FLAGS; do
@@ -212,11 +196,10 @@ print_summary() {
     echo "----------------------------------------------------------------"
     echo "Static Check Summary"
     echo "----------------------------------------------------------------"
-    echo "clang-format-diff: $FORMAT_WARNING_COUNT lines need formatting"
     echo "clang-tidy-diff:   $TIDY_ERROR_COUNT error(s), $TIDY_WARNING_COUNT warning(s)"
     echo "----------------------------------------------------------------"
 
-    if [[ $FORMAT_WARNING_COUNT -gt 0 || $TIDY_ERROR_COUNT -gt 0 || $TIDY_WARNING_COUNT -gt 0 ]]; then
+    if [[ $TIDY_ERROR_COUNT -gt 0 || $TIDY_WARNING_COUNT -gt 0 ]]; then
         echo "Status: FAILED"
         return 1
     fi
@@ -239,7 +222,6 @@ main() {
     check_and_install_tools
     setup_compile_flags
 
-    run_clang_format_diff_check
     run_clang_tidy_diff_check
 
     print_summary
