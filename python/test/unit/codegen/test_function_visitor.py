@@ -261,17 +261,6 @@ def test_func_visit_arguments(filecheck):
     filecheck(func_visit_arguments)(data, 32, True)
 
 
-def test_joined_and_formatted_assert():
-
-    @asc.jit
-    def func_visit_joined_and_formatted_assert(num):
-        assert 1 < 0, f"assert failed {num}"
-
-    with pytest.raises(CodegenError) as e:
-        func_visit_joined_and_formatted_assert[1](100)
-    assert "AssertionError" in str(e.value)
-
-
 def test_error_test_str():
 
     @asc.jit
@@ -283,12 +272,23 @@ def test_error_test_str():
     assert "Argument type in JIT function is not supported: str" in str(e.value)
 
 
-def test_error_test_print():
+def test_builtin_print_dispatch(filecheck):
 
     @asc.jit
-    def func_error_test_print(age):
-        print(age)
+    def func_builtin_print(x):
+        # CHECK: ascendc.printf
+        print(x)
 
-    with pytest.raises(CodegenError) as e:
-        func_error_test_print[1](100)
-    assert "NameError: print is not defined" in str(e.value)
+    filecheck(func_builtin_print)(100)
+
+
+def test_builtin_assert_dispatch(filecheck):
+
+    @asc.jit
+    def func_builtin_assert(x, num: asc.ConstExpr):
+        # CHECK: scf.if
+        # CHECK: ascendc.printf
+        # CHECK: ascendc.trap
+        assert x >= 0, f"assert failed {num}"
+
+    filecheck(func_builtin_assert)(0, 100)

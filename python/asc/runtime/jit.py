@@ -20,9 +20,8 @@ from ..codegen.specialization import BaseArgType, PointerArgType, PlainArgType, 
 from ..common.compat import get_annotations, merge_dict
 from ..language.core.constexpr import ConstExpr
 from ..language.core.dtype import DataType, KnownTypes as KT
-from ..language.core.range import range as asc_range
 from ..language.core.struct import Struct
-from ..language.core.utils import global_builder, static_assert
+from ..language.core.utils import global_builder
 from ..lib import runtime as rt
 from .._C import ir
 from .compiler import CompileOptions, Compiler
@@ -267,7 +266,10 @@ def jit(fn: Optional[Callable[P, T]] = None, **options):
         fn: Function to decorate. If omitted, a decorator with ``options`` is returned.
         **options: Codegen, compile, and launch options.
     """
-    options.setdefault("custom_builtins", CustomBuiltins({"assert": static_assert, "range": asc_range}))
+    from ..language.basic.debug import device_assert, device_print
+    from ..language.core.range import range as asc_range
+    custom_builtins = CustomBuiltins({"assert": device_assert, "print": device_print, "range": asc_range})
+    options.setdefault("custom_builtins", custom_builtins)
 
     def decorator(fn: Callable[P, T]) -> JITFunction[P, T]:
         return JITFunction(fn, **options)

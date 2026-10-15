@@ -46,8 +46,8 @@ def test_repr_uses_module_and_qualname():
 
 def test_default_mainline_builtin_identity_stays_stable_across_processes():
     code = ("from asc.codegen.function_visitor import CustomBuiltins; "
-            "from asc.language.core.utils import static_assert; "
+            "from asc.language.basic.debug import device_assert, device_print; "
             "from asc.language.core.range import range; "
-            "print(repr(CustomBuiltins({'assert': static_assert, 'range': range})))")
+            "print(repr(CustomBuiltins({'assert': device_assert, 'print': device_print, 'range': range})))")
     assert subprocess.check_output([sys.executable, '-c',
                                     code]) == subprocess.check_output([sys.executable, '-c', code])

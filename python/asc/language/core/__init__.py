@@ -122,7 +122,7 @@ from .types import (
     get_shape_size,
     VdeqInfo,
 )
-from .utils import ceildiv, static_assert
+from .utils import ceildiv
 
 __all__ = [
     # .aipp_types
@@ -250,7 +250,6 @@ __all__ = [
     "VdeqInfo",
     # .core.utils
     "ceildiv",
-    "static_assert",
     # .core.array
     "array",
 ]

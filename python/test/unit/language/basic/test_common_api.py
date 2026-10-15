@@ -9,6 +9,7 @@
 import asc
 from asc.runtime import config
 from asc.runtime.jit import MockTensor
+import pytest
 
 
 def setup_function():
@@ -519,6 +520,41 @@ def test_dump_tensor(mock_launcher_run):
     x = MockTensor(asc.float16)
     kernel_dump_tensor[1](x)
     assert mock_launcher_run.call_count == 1
+
+
+def test_device_print(mock_launcher_run):
+
+    @asc.jit
+    def kernel_device_print(x: asc.GlobalAddress) -> None:
+        x_local = asc.LocalTensor(dtype=asc.float16, pos=asc.TPosition.VECIN, addr=0, tile_size=512)
+        x_gm = asc.GlobalTensor()
+        x_gm.set_global_buffer(x)
+        print("local:", x_local, "global:", x_gm, "index:", asc.get_block_idx(), sep=", ", end=";\n")
+
+    x = MockTensor(asc.float16)
+    kernel_device_print[1](x)
+    assert mock_launcher_run.call_count == 1
+
+
+def test_static_print(capsys):
+    asc.static_print("hello", "world", sep=", ", end=";\n")
+    assert capsys.readouterr().out == "hello, world;\n"
+
+
+def test_device_assert(mock_launcher_run):
+
+    @asc.jit
+    def kernel_device_assert(index: int) -> None:
+        asc.device_assert(index >= 0, "index must be non-negative")
+
+    kernel_device_assert[1](0)
+    assert mock_launcher_run.call_count == 1
+
+
+def test_static_assert():
+    asc.static_assert(True, "ok")
+    with pytest.raises(AssertionError, match="condition failed"):
+        asc.static_assert(False, "condition failed")
 
 
 def test_metrics_prof_start(mock_launcher_run):

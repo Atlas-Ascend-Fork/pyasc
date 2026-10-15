@@ -14,7 +14,6 @@ from typing_extensions import ParamSpec, TypeAlias
 
 from ..._C import ir
 from ...common.compat import isinstance
-from .constexpr import ConstExpr
 
 FnT = TypeVar("FnT", bound=Callable)
 T = TypeVar("T")
@@ -216,14 +215,6 @@ def require_jit(fn: Callable[P, T]) -> Callable[P, T]:
         return fn(*args, **kwargs)
 
     return allow_jit(wrapper)
-
-
-def static_assert(test: bool, message: Optional[str] = None) -> None:
-    test = ConstExpr.unwrap(test)
-    if not isinstance(test, bool):
-        raise TypeError(f"Assertion condition could not be determined, expected bool, got {test.__class__.__name__}")
-    if not test:
-        raise AssertionError(message)
 
 
 class GlobalTensorDocstring:
