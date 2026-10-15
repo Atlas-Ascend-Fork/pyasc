@@ -69,23 +69,28 @@ class Function(Generic[P, T]):
             # Set a placeholder hash to break recursion in case the function
             # transitively calls itself. The full hash is set after.
             self.hash = f"recursion:{self.fn_name}"
-            nonlocals = inspect.getclosurevars(self.fn).nonlocals
-            from .dependencies_finder import DependenciesFinder
-            dependencies_finder = DependenciesFinder(
-                name_=self.fn_name,
-                globals_=self.__globals__,
-                nonlocals_=nonlocals,
-                src_=self.src_without_decorator,
-            )
+            try:
+                nonlocals = inspect.getclosurevars(self.fn).nonlocals
+                from .dependencies_finder import DependenciesFinder
+                dependencies_finder = DependenciesFinder(
+                    name_=self.fn_name,
+                    globals_=self.__globals__,
+                    nonlocals_=nonlocals,
+                    src_=self.src_without_decorator,
+                )
 
-            dependencies_finder.visit(self.parse())
-            self.hash = dependencies_finder.ret + str(self.starting_line_number)
-            self.used_global_vals = dict(sorted(dependencies_finder.used_global_vals.items()))
+                dependencies_finder.visit(self.parse())
+                self.hash = dependencies_finder.ret + str(self.starting_line_number)
+                self.used_global_vals = dict(sorted(dependencies_finder.used_global_vals.items()))
 
-            self.hash += str([(name, val)
-                              for (name, _), (val, _) in self.used_global_vals.items()
-                              if isinstance(val, ConstExpr)])
-            self.hash = hashlib.sha256(self.hash.encode("utf-8")).hexdigest()
+                self.hash += str([(name, val)
+                                  for (name, _), (val, _) in self.used_global_vals.items()
+                                  if isinstance(val, ConstExpr)])
+                self.hash = hashlib.sha256(self.hash.encode("utf-8")).hexdigest()
+            except Exception:
+                self.hash = None
+                self.used_global_vals = {}
+                raise
         return self.hash
 
     @staticmethod
