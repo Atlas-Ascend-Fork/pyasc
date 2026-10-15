@@ -24,6 +24,12 @@ class TorchTensor(Protocol):
     def ravel(self) -> Self:
         ...
 
+    def is_contiguous(self) -> bool:
+        ...
+
+    def copy_(self, src: Self) -> Self:
+        ...
+
 
 class MemoryHandle(abc.ABC):
 
@@ -68,7 +74,12 @@ class NumpyArrayHandle(MemoryHandle):
         return int(self.handle.value)
 
     def copy_from_device(self) -> None:
-        rt.copy_data_from_device(self.array.ctypes.data_as(ctypes.c_void_p), self.handle, self.array.nbytes)
+        target = self.array
+        if not target.flags.c_contiguous:
+            target = numpy.empty_like(target, order="C")
+        rt.copy_data_from_device(target.ctypes.data_as(ctypes.c_void_p), self.handle, target.nbytes)
+        if target is not self.array:
+            self.array[...] = target
 
     def release_memory(self) -> None:
         rt.free(self.handle)
@@ -85,7 +96,14 @@ class TorchCpuTensorHandle(MemoryHandle):
         return self.handle.value
 
     def copy_from_device(self) -> None:
-        rt.copy_data_from_device(ctypes.c_void_p(self.tensor.data_ptr()), self.handle, self.tensor.nbytes)
+        target = self.tensor
+        if not target.is_contiguous():
+            import torch
+
+            target = torch.empty_like(target, memory_format=torch.contiguous_format)
+        rt.copy_data_from_device(ctypes.c_void_p(target.data_ptr()), self.handle, target.nbytes)
+        if target is not self.tensor:
+            self.tensor.copy_(target)
 
     def release_memory(self) -> None:
         rt.free(self.handle)
