@@ -10,6 +10,8 @@
 
 ## GlobalTensor
 
+<a id="asc.language.core.GlobalTensor"></a>
+
 ### *class* asc.language.core.GlobalTensor(handle: Value)
 
 GlobalTensor用来存放Global Memory（外部存储）的全局数据。
@@ -40,6 +42,8 @@ LocalMemAllocator仅支持在Ascend C静态Tensor编程方式中使用，不可�
 
 ## LocalTensor
 
+<a id="asc.language.core.LocalTensor"></a>
+
 ### *class* asc.language.core.LocalTensor
 
 ### *class* asc.language.core.LocalTensor(dtype: DataType)
@@ -69,6 +73,8 @@ LocalTensor用于存放AI Core中Local Memory（内部存储）的数据，支�
 | [`LocalTensor.set_value`](generated/asc.language.core.LocalTensor.set_value.md#asclanguagecorelocaltensorset_value)                                  | 设置LocalTensor中的某个值。 该接口仅在LocalTensor的TPosition为VECIN/VECCALC/VECOUT时支持。                  |
 
 ## ShapeInfo
+
+<a id="asc.language.core.ShapeInfo"></a>
 
 ### *class* asc.language.core.ShapeInfo
 

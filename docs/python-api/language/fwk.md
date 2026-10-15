@@ -29,6 +29,8 @@ TBuf占用的存储空间通过TPipe进行管理，您可以通过InitBuffer接�
 
 ## TBufPool
 
+<a id="asc.language.fwk.TBufPool"></a>
+
 ### *class* asc.language.fwk.TBufPool(pos: TPosition | None, buf_id_size: int)
 
 ### *class* asc.language.fwk.TBufPool(handle: Value)
@@ -41,6 +43,8 @@ TPipe可以管理全局内存资源，而TBufPool可以手动管理或复用Unif
 | [`TBufPool.reset`](generated/asc.language.fwk.TBufPool.reset.md#asclanguagefwktbufpoolreset)                           | 在切换TBufPool资源池时使用，结束当前TbufPool资源池正在处理的相关事件。 调用后当前资源池及资源池分配的Buffer仍然存在，只是Buffer内容可能会被改写。 可以切换回该资源池后，重新开始使用该Buffer，无需再次分配。 |
 
 ## TPipe
+
+<a id="asc.language.fwk.TPipe"></a>
 
 ### *class* asc.language.fwk.TPipe
 
@@ -62,6 +66,8 @@ TPipe用于统一管理Device端内存等资源，一个Kernel函数必须且只
 | [`TPipe.reset`](generated/asc.language.fwk.TPipe.reset.md#asclanguagefwktpipereset)                                  | 完成资源的释放与eventId等变量的初始化操作，恢复到TPipe的初始化状态。                                                             |
 
 ## TQue
+
+<a id="asc.language.fwk.TQue"></a>
 
 ### *class* asc.language.fwk.TQue(pos: TPosition = TPosition.VECIN, depth: int = 1)
 

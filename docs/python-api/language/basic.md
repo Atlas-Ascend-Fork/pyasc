@@ -87,6 +87,8 @@
 
 ## TensorDesc operations
 
+<a id="asc.language.basic.TensorDesc"></a>
+
 ### *class* asc.language.basic.TensorDesc(dtype: DataType = KT.float32)
 
 ### *class* asc.language.basic.TensorDesc(handle: Value, dtype: DataType = KT.float32)

@@ -10,6 +10,8 @@
 
 ## Matmul
 
+<a id="asc.language.adv.Matmul"></a>
+
 ### *class* asc.language.adv.Matmul(a: MatmulType, b: MatmulType, c: MatmulType, bias: MatmulType | None = None, matmul_config: MatmulConfig | None = None, matmul_policy: MatmulPolicy | None = 0)
 
 ### *class* asc.language.adv.Matmul(handle: Value)
