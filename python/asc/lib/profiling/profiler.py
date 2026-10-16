@@ -137,6 +137,7 @@ class Profiler:
                 self.populate_tasks(item, "task_id", "kernel_name", "kernel_type", "task_time(us)", tasks)
                 break
         self.results[run_id] = ProfilingResult(tasks, run_id, stored_at=datetime.now())
+        return self.results[run_id]
 
     def store_last_result(self) -> ProfilingResult:
         if not os.path.isdir(self.result_path):
@@ -147,7 +148,7 @@ class Profiler:
         )
         if last_run_id is None:
             raise RuntimeError(f"There is no profiling results in {self.result_path}")
-        self.store_result(last_run_id)
+        return self.store_result(last_run_id)
 
     @contextmanager
     def profile(self, device_id: Optional[int] = None, cleanup: bool = True,
