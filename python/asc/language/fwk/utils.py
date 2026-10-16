@@ -842,14 +842,15 @@ class TBufPoolDocstring:
         param_list = """
         **参数说明**
 
-        - size：需要获取的Tensor元素个数。
-        - buf_offset：从起始位置的偏移长度，单位是字节，且需32字节对齐。
+        - buf_pool：待初始化的TBufPool对象。
+        - len：为新资源池划分的内存大小，单位为字节，默认值为0。
+        - share_buf：可选的被复用TBufPool对象，默认值为None；传入时与该资源池共享物理内存。
         """
 
         return_list = """
         **返回值说明**
 
-        获取到的LocalTensor。
+        无（None）。
         """
 
         constraint_list = """
@@ -871,7 +872,7 @@ class TBufPoolDocstring:
                 src1_global.set_global_buffer(src1_gm);
                 dst_global.set_global_buffer(dst_gm);
                 pipe.init_buf_pool(tbuf_pool0, 131072);
-                tbuf_pool0.init_buffer(que=src_que0, num=1, len=65536); // Total src0
+                tbuf_pool0.init_buffer(que=src_que0, num=1, len=65536)  # Total src0
                 tbuf_pool0.init_buf_pool(tbuf_pool1, 65536);
                 tbuf_pool0.init_buf_pool(tbuf_pool2, 65536, tbuf_pool1);
 
@@ -939,7 +940,7 @@ class TBufPoolDocstring:
                 src1_global.set_global_buffer(src1_gm);
                 dst_global.set_global_buffer(dst_gm);
                 pipe.init_buf_pool(tbuf_pool0, 131072);
-                tbuf_pool0.init_buffer(que=src_que0, num=1, len=65536); // Total src0
+                tbuf_pool0.init_buffer(que=src_que0, num=1, len=65536)  # Total src0
                 tbuf_pool0.init_buf_pool(tbuf_pool1, 65536);
                 tbuf_pool0.init_buf_pool(tbuf_pool2, 65536, tbuf_pool1);
 
@@ -997,7 +998,7 @@ class TBufPoolDocstring:
                 src1_global.set_global_buffer(src1_gm);
                 dst_global.set_global_buffer(dst_gm);
                 pipe.init_buf_pool(tbuf_pool0, 131072);
-                tbuf_pool0.init_buffer(que=src_que0, num=1, len=65536); // Total src0
+                tbuf_pool0.init_buffer(que=src_que0, num=1, len=65536)  # Total src0
                 tbuf_pool0.init_buf_pool(tbuf_pool1, 65536);
                 tbuf_pool0.init_buf_pool(tbuf_pool2, 65536, tbuf_pool1);
 

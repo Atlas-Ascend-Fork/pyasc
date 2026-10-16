@@ -25,7 +25,7 @@ def init(src0_gm: asc.GlobalAddress, src1_gm: asc.GlobalAddress, dst_gm: asc.Glo
     src1_global.set_global_buffer(src1_gm);
     dst_global.set_global_buffer(dst_gm);
     pipe.init_buf_pool(tbuf_pool0, 131072);
-    tbuf_pool0.init_buffer(que=src_que0, num=1, len=65536); // Total src0
+    tbuf_pool0.init_buffer(que=src_que0, num=1, len=65536)  # Total src0
     tbuf_pool0.init_buf_pool(tbuf_pool1, 65536);
     tbuf_pool0.init_buf_pool(tbuf_pool2, 65536, tbuf_pool1);
 
