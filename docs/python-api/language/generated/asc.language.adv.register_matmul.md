@@ -12,9 +12,10 @@ REGIST_MATMUL_OBJ(tpipe, workspace, ...)
 
 **参数说明**
 
-- tpipe: Tpipe对象。
+- pipe: TPipe对象。
 - workspace: 系统workspace指针。
-- &args: 可变参数，传入Matmul对象和与之对应的Tiling结构。
+- matmul: 待初始化的Matmul对象。
+- tiling: 可选的Matmul Tiling参数；未传入时，通过Matmul.init单独设置。
 
 **约束说明**
 
@@ -25,10 +26,10 @@ REGIST_MATMUL_OBJ(tpipe, workspace, ...)
 **调用示例**
 
 ```python
-pipe = asc.Tpipe()
+pipe = asc.TPipe()
 # 推荐：初始化单个matmul对象，传入tiling参数
-mm.register_matmul(pipe, workspace, mm, tiling)
+asc.adv.register_matmul(pipe, workspace, mm, tiling)
 # 初始化单个matmul对象，未传入tiling参数。注意，该场景下需要使用Init接口单独传入tiling参数。这种方式将matmul对象的初始化和tiling的设置分离，比如，Tiling可变的场景，可通过这种方式多次对Tiling进行重新设置
-mm.register_matmul(pipe, workspace, mm)
-mm.init(&tiling)
+asc.adv.register_matmul(pipe, workspace, mm)
+mm.init(tiling)
 ```

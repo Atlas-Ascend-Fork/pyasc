@@ -12,12 +12,11 @@ __aicore__ inline void Init(const TCubeTiling* __restrict cubeTiling, TPipe* tpi
 
 **参数说明**
 
-- cube_tiling: Matmul Tiling参数.
-- tpipe: Tpipe对象。
+- tiling: Matmul Tiling参数。
 
 **调用示例**
 
 ```python
-regist_matmul(&pipe, get_sys_workspace_ptr(), mm)
-mm.init(&tiling)
+asc.adv.register_matmul(pipe, workspace, mm)
+mm.init(tiling)
 ```
