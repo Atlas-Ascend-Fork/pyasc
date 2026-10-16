@@ -63,7 +63,7 @@ class MsprofInterface:
 
     def init(self, result_path: str) -> None:
         c_path = result_path.encode("utf-8")
-        c_size = ctypes.c_size_t(len(result_path))
+        c_size = ctypes.c_size_t(len(c_path))
         self.call("aclprofInit", c_path, c_size)
 
     def create_config(self, device_ids: Iterable[int], metric: AicoreMetrics,
