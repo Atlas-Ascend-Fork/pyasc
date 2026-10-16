@@ -107,6 +107,7 @@ class Profiler:
         self.msprof.destroy_config(self.config)
         self.config = None
         self.msprof.finalize()
+        self.started = False
 
     def export(self) -> None:
         msprof_tool = get_ascend_path() / "tools/profiler/profiler_tool/analysis/msprof/msprof.py"
@@ -165,8 +166,10 @@ class Profiler:
         """
         try:
             self.start(device_id, metrics=metrics, profile_types=profile_types)
-            yield
-            self.stop()
+            try:
+                yield
+            finally:
+                self.stop()
             self.export()
             self.store_last_result()
         finally:
