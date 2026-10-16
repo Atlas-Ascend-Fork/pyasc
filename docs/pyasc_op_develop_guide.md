@@ -160,9 +160,9 @@
    vadd_kernel
    ├── offset = get_block_idx() * block_length
    ├── GlobalTensor 设置
-   │   ├── x_gm.set_global_buffer()
-   │   ├── y_gm.set_global_buffer()
-   │   └── z_gm.set_global_buffer()
+   │   ├── x_gm.set_global_buffer(x + offset, block_length)
+   │   ├── y_gm.set_global_buffer(y + offset, block_length)
+   │   └── z_gm.set_global_buffer(z + offset, block_length)
    ├── LocalTensor 创建
    └── for i in range(TILE_NUM * BUFFER_NUM):
        ├── CopyIn: data_copy (x_local, y_local <- x_gm, y_gm)

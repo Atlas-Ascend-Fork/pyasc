@@ -1,8 +1,8 @@
 # asc.language.core.GlobalTensor.set_global_buffer
 
-#### GlobalTensor.set_global_buffer(buffer: GlobalAddress | None = None) → None
+#### GlobalTensor.set_global_buffer(buffer: GlobalAddress) → None
 
-#### GlobalTensor.set_global_buffer(buffer: GlobalAddress | None = None, buffer_size: int | None = None) → None
+#### GlobalTensor.set_global_buffer(buffer: GlobalAddress, buffer_size: int | None = None) → None
 
 传入全局数据地址，初始化GlobalTensor。
 

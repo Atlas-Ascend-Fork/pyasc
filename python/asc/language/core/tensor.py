@@ -139,17 +139,16 @@ class GlobalTensor(BaseTensor):
         return PlainValue(handle, self.dtype)
 
     @overload
-    def set_global_buffer(self, buffer: Optional[GlobalAddress] = None) -> None:
+    def set_global_buffer(self, buffer: GlobalAddress) -> None:
         ...
 
     @overload
-    def set_global_buffer(self, buffer: Optional[GlobalAddress] = None, buffer_size: Optional[int] = None) -> None:
+    def set_global_buffer(self, buffer: GlobalAddress, buffer_size: Optional[int] = None) -> None:
         ...
 
     @require_jit
     @set_tensor_docstring(tensor_name="GlobalTensor", api_name="set_global_buffer")
-    def set_global_buffer(self, buffer: Optional[GlobalAddress] = None,
-                          buffer_size: Optional[RuntimeInt] = None) -> None:
+    def set_global_buffer(self, buffer: GlobalAddress, buffer_size: Optional[RuntimeInt] = None) -> None:
 
         if buffer is None or buffer.dtype is None:
             raise ValueError("Either DataType or typed GlobalAddress must be provided to instantiate GlobalTensor")

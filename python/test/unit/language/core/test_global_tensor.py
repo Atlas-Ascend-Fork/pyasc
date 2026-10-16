@@ -6,6 +6,9 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 
+import inspect
+import typing
+
 import asc
 from asc.runtime import config
 from asc.runtime.jit import MockTensor
@@ -103,6 +106,14 @@ def test_set_global_buffer(mock_launcher_run):
     data = MockTensor(asc.float32)
     kernel_set_global_buffer[1](data)
     assert mock_launcher_run.call_count == 1
+
+
+def test_set_global_buffer_requires_buffer_argument():
+    parameters = inspect.signature(asc.GlobalTensor.set_global_buffer).parameters
+    assert parameters["buffer"].default is inspect.Parameter.empty
+    buffer_type = typing.get_type_hints(asc.GlobalTensor.set_global_buffer)["buffer"]
+    assert type(None) not in typing.get_args(buffer_type)
+    assert parameters["buffer_size"].default is None
 
 
 def test_set_l2_cache_hint(mock_launcher_run):
