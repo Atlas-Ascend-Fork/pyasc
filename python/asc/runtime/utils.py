@@ -39,7 +39,7 @@ class FileUtils:
         if dump_dir is None or os.path.exists(dump_dir):
             return
         each_level_path = str(dump_dir).split(os.sep)
-        base_path = os.sep
+        base_path = os.sep if os.path.isabs(dump_dir) else ""
         for item in each_level_path:
             base_path = os.path.join(base_path, item)
             if not item or os.path.exists(base_path):
