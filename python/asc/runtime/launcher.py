@@ -194,38 +194,39 @@ class Launcher:
 
         input_blobs: List[bytes] = []
         memory_args: List[MemoryHandle] = []
-        for arg in kernel_args:
-            scalar_bytes = self.scalar_to_bytes(arg)
-            if scalar_bytes is not None:
-                input_blobs.append(scalar_bytes)
-                item_size = len(scalar_bytes)
-                if item_size < 4:
-                    input_blobs.append(b"\0" * (4 - item_size))
-                elif item_size > 4 and item_size < 8:
-                    input_blobs.append(b"\0" * (8 - item_size))
-            elif isinstance(arg, MemoryHandle):
-                if blobs_size(input_blobs) % 8 != 0:
-                    input_blobs.append(b"\0" * 4)
-                handle = arg.copy_to_device()
-                input_blobs.append(np.uint64(handle).tobytes())
-                memory_args.append(arg)
-            else:
-                raise TypeError(f"Unsupported kernel argument of type {type(arg)}")
-        aligned_len = int(np.ceil(blobs_size(input_blobs) / 8)) * 8
-        combined_inputs = bytes().join(input_blobs).ljust(aligned_len, b"\0")
-        chunks = [combined_inputs[i:i + 8] for i in range(0, len(combined_inputs), 8)]
-        inputs = [ctypes.c_uint64(int.from_bytes(x, "little")) for x in chunks]
-        core_num = self.options.core_num or self.get_core_num()
-        stream = self.options.stream or rt.current_stream()
-        rt.launch_kernel(function, core_num, inputs, stream_handle=stream)
-        rt.synchronize()
-        for index, arg in enumerate(memory_args):
-            try:
+        try:
+            for arg in kernel_args:
+                scalar_bytes = self.scalar_to_bytes(arg)
+                if scalar_bytes is not None:
+                    input_blobs.append(scalar_bytes)
+                    item_size = len(scalar_bytes)
+                    if item_size < 4:
+                        input_blobs.append(b"\0" * (4 - item_size))
+                    elif item_size > 4 and item_size < 8:
+                        input_blobs.append(b"\0" * (8 - item_size))
+                elif isinstance(arg, MemoryHandle):
+                    if blobs_size(input_blobs) % 8 != 0:
+                        input_blobs.append(b"\0" * 4)
+                    handle = arg.copy_to_device()
+                    memory_args.append(arg)
+                    input_blobs.append(np.uint64(handle).tobytes())
+                else:
+                    raise TypeError(f"Unsupported kernel argument of type {type(arg)}")
+            aligned_len = int(np.ceil(blobs_size(input_blobs) / 8)) * 8
+            combined_inputs = bytes().join(input_blobs).ljust(aligned_len, b"\0")
+            chunks = [combined_inputs[i:i + 8] for i in range(0, len(combined_inputs), 8)]
+            inputs = [ctypes.c_uint64(int.from_bytes(x, "little")) for x in chunks]
+            core_num = self.options.core_num or self.get_core_num()
+            stream = self.options.stream or rt.current_stream()
+            rt.launch_kernel(function, core_num, inputs, stream_handle=stream)
+            rt.synchronize()
+            for index, arg in enumerate(memory_args):
                 if enable_debug and index == len(memory_args) - 1:
                     rt.call_print_interface(inputs[-1], utils.TOTAL_DUMP_SIZE, stream, func_name)
                 else:
                     arg.copy_from_device()
-            finally:
+        finally:
+            for arg in memory_args:
                 arg.release_memory()
 
     def run(self, kernel: CompiledKernel, function_name: str, user_args: Tuple[Any], discard_handles: bool = True,
