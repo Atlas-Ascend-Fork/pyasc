@@ -26,7 +26,9 @@ def build_print_utils(obj_name: str, src_file: str, src_dir: str) -> str:
 
     if not os.path.exists(src_dir):
         os.makedirs(src_dir, 0o750, exist_ok=True)
-    cxx = os.getenv("CC")
+    cxx = os.getenv("CXX")
+    if cxx is None:
+        cxx = os.getenv("CC")
     if cxx is None:
         cpp = shutil.which("c++")
         gxx = shutil.which("g++")
