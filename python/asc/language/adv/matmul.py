@@ -755,8 +755,10 @@ def get_matmul_api_tiling(mm_cfg: MatmulConfig, l1_size: int, a_type: MatmulType
 
 @require_jit
 @set_matmul_docstring(api_name="get_matmul_api_tiling")
-def get_matmul_api_tiling(mm_cfg: MatmulConfig, a_type: MatmulType, b_type: MatmulType, c_type: MatmulType,
-                          bias_type: MatmulType, l1_size: Optional[RuntimeInt] = None) -> MatmulApiStaticTiling:
+def get_matmul_api_tiling(mm_cfg: MatmulConfig, l1_size: RuntimeInt, a_type: MatmulType, b_type: MatmulType,
+                          c_type: MatmulType, bias_type: Optional[MatmulType] = None) -> MatmulApiStaticTiling:
+    if bias_type is None:
+        bias_type = c_type
     builder = global_builder.get_ir_builder()
     ir_type = builder.get_matmul_type(
         a_type.position, a_type.format, a_type.dtype.to_ir(), a_type.is_trans, a_type.layout,  # a

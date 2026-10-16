@@ -18,7 +18,7 @@ __aicore__ constexpr MatmulApiStaticTiling GetMatmulApiTiling(const MatmulConfig
 - a_type：A矩阵类型信息，通过MatmulType来定义。
 - b_type：B矩阵类型信息，通过MatmulType来定义。
 - c_type：C矩阵类型信息，通过MatmulType来定义。
-- bias_type：BIAS矩阵类型信息，通过MatmulType来定义。
+- bias_type：BIAS矩阵类型信息，通过MatmulType来定义；省略或传入 None 时使用 c_type。
 
 **返回值说明**
 

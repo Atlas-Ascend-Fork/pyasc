@@ -157,6 +157,8 @@ def test_get_matmul_api_tiling(mock_launcher_run):
                                       single_core_mn=0, schedule_type=asc.ScheduleType.INNER_PRODUCT)
         matmul_api_static = asc.adv.get_matmul_api_tiling(mm_cfg=mm_cfg, l1_size=524288, a_type=a_type, b_type=b_type,
                                                           c_type=c_type, bias_type=c_type)
+        asc.adv.get_matmul_api_tiling(mm_cfg, 524288, a_type, b_type, c_type, c_type)
+        asc.adv.get_matmul_api_tiling(mm_cfg, 524288, a_type, b_type, c_type)
 
     workspace = MockTensor(asc.uint8)
     kernel_get_matmul_api_tiling[1](workspace)
