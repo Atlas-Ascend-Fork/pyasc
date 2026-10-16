@@ -156,7 +156,7 @@ class JITFunction(Function[P, T]):
         key = separator.join(
             [f"{name}={val.__class__.__name__}:{self.get_arg_dtype(val)}" for name, val in prereqs.arg_types.items()])
         cache_factors.append(key)
-        key = f"fn_name={self.fn_name}"
+        key = f"fn_name={self.fn_name};soc_version={rt.get_soc_version().value}"
         cache_factors.append(key)
         separator = "__"
         cache_factors = separator.join(cache_factors)
