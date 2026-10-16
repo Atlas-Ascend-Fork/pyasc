@@ -73,7 +73,7 @@ class MsprofInterface:
         for type_id in type_ids:
             type_config |= type_id
         device_ids = tuple(device_ids)
-        c_device_id_list = (ctypes.c_uint32 * 1)(*device_ids)
+        c_device_id_list = (ctypes.c_uint32 * len(device_ids))(*device_ids)
         c_device_nums = ctypes.c_uint32(len(device_ids))
         c_aicore_metrics = ctypes.c_int(metric.value)
         c_data_type_config = ctypes.c_uint64(type_config)
