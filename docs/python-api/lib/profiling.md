@@ -129,7 +129,7 @@ print(task_time_median(profiler.last_result.tasks, name="kernel"))
 
 - tasks：`ProfilingResult.tasks`。
 - name：只统计该 kernel 名。省略时使用第一条 AI Core 任务的名字。
-- skip：丢弃前若干条样本，用于跳过 warmup。
+- skip：丢弃前若干条匹配样本，用于跳过 warmup。必须非负，否则抛出 `ValueError`；丢弃后没有剩余样本时抛出 `RuntimeError`，不使用 warmup 样本计算中位数。
 
 ## MsprofInterface
 

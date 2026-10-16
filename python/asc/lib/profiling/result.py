@@ -43,6 +43,8 @@ def task_time_median(tasks: Iterable[ProfilingTask], name: Optional[str] = None,
             the first AI Core task name is used as the filter.
         skip: Number of leading matching samples to drop (warmup).
     """
+    if skip < 0:
+        raise ValueError("skip must be non-negative")
     values = []
     for task in tasks:
         if task.type not in task_types:
@@ -52,8 +54,7 @@ def task_time_median(tasks: Iterable[ProfilingTask], name: Optional[str] = None,
         elif task.name != name:
             continue
         values.append(task.duration)
+    values = values[skip:]
     if len(values) == 0:
         raise RuntimeError(f"There is no timings for task {name!r}")
-    if len(values) > skip:
-        values = values[skip:]
     return np.round(np.median(np.array(values, dtype=np.float64)), 3).item()
