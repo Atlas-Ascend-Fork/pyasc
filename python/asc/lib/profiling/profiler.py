@@ -141,7 +141,10 @@ class Profiler:
     def store_last_result(self) -> ProfilingResult:
         if not os.path.isdir(self.result_path):
             raise RuntimeError(f"{self.result_path} is not a directory")
-        last_run_id = max((d for d in os.listdir(self.result_path)), default=None)
+        last_run_id = max(
+            (d for d in os.listdir(self.result_path) if (Path(self.result_path) / d).is_dir()),
+            default=None,
+        )
         if last_run_id is None:
             raise RuntimeError(f"There is no profiling results in {self.result_path}")
         self.store_result(last_run_id)
