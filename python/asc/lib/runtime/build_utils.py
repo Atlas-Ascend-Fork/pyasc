@@ -89,5 +89,5 @@ def build_npu_ext(obj_name: str, is_model: bool, soc: config.Platform, src_path:
 
 
 if __name__ == "__main__":
-    build_npu_ext("npu_utils", True, os.path.join("./", "npu_utils.cpp"), "./")
-    build_npu_ext("rts_wrapper", True, os.path.join("./", "rt_wrapper.cpp"), "./")
+    build_npu_ext("npu_utils", True, config.Platform.Ascend910B1, os.path.join("./", "npu_utils.cpp"), "./")
+    build_npu_ext("rts_wrapper", True, config.Platform.Ascend910B1, os.path.join("./", "rt_wrapper.cpp"), "./")
