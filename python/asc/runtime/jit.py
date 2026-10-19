@@ -62,10 +62,14 @@ class JITFunction(Function[P, T]):
         if not isinstance(options, tuple):
             options = (options, )
         try:
-            self.launch_options = self.launcher.options_cls(*options)
+            launch_options = self.launcher.options_cls(*options)
         except Exception as e:
             raise TypeError("Provided launch options are not supported") from e
-        return self._run
+
+        def run(*args: P.args, **kwargs: P.kwargs) -> T:
+            return self._run_with_options(launch_options, args, kwargs)
+
+        return run
 
     @staticmethod
     def get_arg_type(value: Any) -> BaseArgType:
@@ -222,6 +226,9 @@ class JITFunction(Function[P, T]):
         launcher.run(kernel, self.fn.__name__, runtime_args, not enable_cache, save_launched_kernel)
 
     def _run(self, *args: P.args, **kwargs: P.kwargs) -> T:
+        return self._run_with_options(self.launch_options, args, kwargs)
+
+    def _run_with_options(self, launch_options: LaunchOptions, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> T:
         kwargs = merge_dict(self.default_options, kwargs)
         codegen_options = self.extract_kwargs(self.codegen.options_cls, kwargs)
         compile_options = self.extract_kwargs(self.compiler.options_cls, kwargs)
@@ -232,7 +239,7 @@ class JITFunction(Function[P, T]):
         arg_types = {name: self.get_arg_type(value) for name, value in runtime_args.items()}
         prereqs = CompilePrereqs(arg_types, constexprs, codegen_options, compile_options)
         kernel, mem_cache_key = self._compile_and_cache(prereqs)
-        self._run_launcher(kernel, self.launch_options, tuple(runtime_args.values()), mem_cache_key)
+        self._run_launcher(kernel, launch_options, tuple(runtime_args.values()), mem_cache_key)
 
 
 @overload
