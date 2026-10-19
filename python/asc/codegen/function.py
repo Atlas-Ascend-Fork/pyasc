@@ -72,9 +72,13 @@ class Function(Generic[P, T]):
             try:
                 nonlocals = inspect.getclosurevars(self.fn).nonlocals
                 from .dependencies_finder import DependenciesFinder
+                # A closure variable always shadows its same-named global inside the function body,
+                # so names captured from enclosing scopes must not be visible through the globals
+                # mapping; otherwise the dependency finder would resolve them to the global value.
+                globals_ = {name: value for name, value in self.__globals__.items() if name not in nonlocals}
                 dependencies_finder = DependenciesFinder(
                     name_=self.fn_name,
-                    globals_=self.__globals__,
+                    globals_=globals_,
                     nonlocals_=nonlocals,
                     src_=self.src_without_decorator,
                 )
