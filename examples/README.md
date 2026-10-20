@@ -46,7 +46,7 @@ python3 <示例文件>.py -r [RUN_MODE] -v [SOC_VERSION]
 ```
 
 - `RUN_MODE`：`Model`（仿真器，无需 NPU）或 `NPU`（上板运行）
-- `SOC_VERSION`：昇腾 AI 处理器型号，如 `Ascend910B1`、`Ascend910C`
+- `SOC_VERSION`：昇腾 AI 处理器型号，如 `Ascend910B1`
 
 ### 示例
 
@@ -55,5 +55,5 @@ python3 <示例文件>.py -r [RUN_MODE] -v [SOC_VERSION]
 python3 examples/01_add/add.py -r Model -v Ascend910B1
 
 # NPU 上板运行 Matmul MIX 示例
-python3 examples/03_matmul_mix/matmul_mix.py -r NPU -v Ascend910C
+python3 examples/03_matmul_mix/matmul_mix.py -r NPU -v Ascend910B1
 ```
