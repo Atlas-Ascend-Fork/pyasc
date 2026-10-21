@@ -193,7 +193,7 @@ class Compiler:
                 if proc.returncode == 0:
                     return
             raise RuntimeError("{} failed!\nError message is {}\nPlease rerun {}".format(
-                cmd_type, out.decode(), (" ".join(cmd))))
+                cmd_type, out.decode(errors="replace"), (" ".join(cmd))))
 
     def preprocess_module(self, mod: ir.ModuleOp) -> None:
         builder = ir.Builder(mod.op)
