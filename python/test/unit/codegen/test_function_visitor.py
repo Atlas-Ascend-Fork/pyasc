@@ -11,7 +11,6 @@ from unittest.mock import patch
 import pytest
 
 import asc
-from asc.codegen.errors import CodegenError
 from asc.runtime.jit import MockTensor
 
 
@@ -292,3 +291,66 @@ def test_builtin_assert_dispatch(filecheck):
         assert x >= 0, f"assert failed {num}"
 
     filecheck(func_builtin_assert)(0, 100)
+
+
+def test_func_visit_floordiv_int(filecheck):
+
+    @asc.jit
+    def func_visit_floordiv_int_kernel(a, b):
+        # CHECK: arith.divsi
+        # CHECK: arith.remsi
+        # CHECK: arith.cmpi ne
+        # CHECK: arith.cmpi slt
+        # CHECK: arith.cmpi slt
+        # CHECK: arith.xori
+        # CHECK: arith.andi
+        # CHECK: arith.select
+        # CHECK: arith.subi
+        result = a // b
+
+    filecheck(func_visit_floordiv_int_kernel)(-5, 2)
+
+
+def test_func_visit_rfloordiv_int(filecheck):
+
+    @asc.jit
+    def func_visit_rfloordiv_int_kernel(b):
+        # CHECK: arith.divsi
+        # CHECK: arith.remsi
+        # CHECK: arith.select
+        result = -5 // b
+
+    filecheck(func_visit_rfloordiv_int_kernel)(2)
+
+
+def test_func_visit_floordiv_float(filecheck):
+
+    @asc.jit
+    def func_visit_floordiv_float_kernel(a, b):
+        # CHECK: arith.divf
+        # CHECK: math.floor
+        result = a // b
+
+    filecheck(func_visit_floordiv_float_kernel)(5.0, 2.0)
+
+
+def test_func_visit_rfloordiv_float(filecheck):
+
+    @asc.jit
+    def func_visit_rfloordiv_float_kernel(b):
+        # CHECK: arith.divf
+        # CHECK: math.floor
+        result = -5.0 // b
+
+    filecheck(func_visit_rfloordiv_float_kernel)(2.0)
+
+
+def test_func_visit_truediv_control(filecheck):
+
+    @asc.jit
+    def func_visit_truediv_control_kernel(a, b):
+        # CHECK: arith.divf
+        # CHECK-NOT: math.floor
+        result = a / b
+
+    filecheck(func_visit_truediv_control_kernel)(5.0, 2.0)

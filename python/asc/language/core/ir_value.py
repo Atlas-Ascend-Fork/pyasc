@@ -94,7 +94,7 @@ class PlainValue(IRValue):
 
     @require_jit
     def __floordiv__(self, other) -> PlainValue:
-        return self.apply_binary_op(self, other, "DivSI", "DivF")
+        return self._apply_floordiv(self, other)
 
     @require_jit
     def __mod__(self, other) -> PlainValue:
@@ -147,7 +147,7 @@ class PlainValue(IRValue):
 
     @require_jit
     def __rfloordiv__(self, other) -> PlainValue:
-        return self.apply_binary_op(other, self, "DivSI", "DivF")
+        return self._apply_floordiv(other, self)
 
     @require_jit
     def __rmod__(self, other) -> PlainValue:
@@ -264,6 +264,37 @@ class PlainValue(IRValue):
         if builder_attr is None:
             raise ValueError(f"Binary operation is not supported between {lhs} and {rhs}")
         handle = getattr(global_builder.get_ir_builder(), f"create_arith_{builder_attr}Op")(lhs.to_ir(), rhs.to_ir())
+        return PlainValue(handle=handle, dtype=result_type)
+
+    @classmethod
+    def _apply_floordiv(cls, lhs: Any, rhs: Any) -> PlainValue:
+        """Python ``//`` floors the quotient towards negative infinity, while
+        the emitted C-like ``/`` (DivSI/DivF) truncates towards zero."""
+        if not isinstance(lhs, RuntimeNumeric) or not isinstance(rhs, RuntimeNumeric):
+            return NotImplemented
+        result_type = cls.infer_common_type(lhs, rhs)
+        lhs = materialize_ir_value(lhs, result_type)
+        rhs = materialize_ir_value(rhs, result_type)
+        builder = global_builder.get_ir_builder()
+        if result_type.is_float():
+            handle = builder.create_arith_DivFOp(lhs.to_ir(), rhs.to_ir())
+            return PlainValue(handle=builder.create_math_FloorOp(handle), dtype=result_type)
+        if result_type.is_unsigned():
+            # Truncation and flooring coincide for non-negative operands.
+            handle = builder.create_arith_DivSIOp(lhs.to_ir(), rhs.to_ir())
+            return PlainValue(handle=handle, dtype=result_type)
+        # Signed integers: decrement the truncated quotient by one when the
+        # remainder is non-zero and the operands differ in sign.
+        zero = materialize_ir_value(0, result_type).to_ir()
+        one = materialize_ir_value(1, result_type).to_ir()
+        quotient = builder.create_arith_DivSIOp(lhs.to_ir(), rhs.to_ir())
+        remainder = builder.create_arith_RemSIOp(lhs.to_ir(), rhs.to_ir())
+        has_remainder = builder.create_arith_CmpIOp(ir.CmpIPredicate.ne, remainder, zero)
+        lhs_negative = builder.create_arith_CmpIOp(ir.CmpIPredicate.slt, lhs.to_ir(), zero)
+        rhs_negative = builder.create_arith_CmpIOp(ir.CmpIPredicate.slt, rhs.to_ir(), zero)
+        signs_differ = builder.create_arith_XOrIOp(lhs_negative, rhs_negative)
+        decrement = builder.create_arith_SelectOp(builder.create_arith_AndIOp(has_remainder, signs_differ), one, zero)
+        handle = builder.create_arith_SubIOp(quotient, decrement)
         return PlainValue(handle=handle, dtype=result_type)
 
     @classmethod
