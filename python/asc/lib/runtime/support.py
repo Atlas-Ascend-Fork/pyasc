@@ -121,7 +121,7 @@ class MemorySizes:
     bank_group_num: int
 
     class Handle(ctypes.Structure):
-        fields = [
+        _fields_ = [
             ("l0a_size", ctypes.c_uint32),
             ("l0b_size", ctypes.c_uint32),
             ("l0c_size", ctypes.c_uint32),
