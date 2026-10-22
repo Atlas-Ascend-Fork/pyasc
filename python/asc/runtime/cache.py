@@ -129,10 +129,11 @@ def pyasc_key():
     # frontend
     with open(__file__, "rb") as f:
         contents += [hexdigest(f.read())]
-    # codegen and language
+    # Python frontend and runtime compile/launch implementations
     path_prefixes = [
         (os.path.join(pyasc_path, "codegen"), "asc.codegen."),
         (os.path.join(pyasc_path, "language"), "asc.language."),
+        (os.path.join(pyasc_path, "runtime"), "asc.runtime."),
     ]
     for path, prefix in path_prefixes:
         for lib in pkgutil.walk_packages([path], prefix=prefix):
