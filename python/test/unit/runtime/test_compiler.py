@@ -90,7 +90,7 @@ def mock_ir_module():
 
 def test_invalid_compile_option():
     with pytest.raises(RuntimeError, match="Please check input compile option"):
-        invalid_options = CompileOptions(opt_level=0)
+        invalid_options = CompileOptions(opt_level=4)
         Compiler(invalid_options)
 
 

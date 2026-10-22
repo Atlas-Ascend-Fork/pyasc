@@ -80,7 +80,7 @@ class CompileOptions:
 
     opt_level: int = 3
     """
-    Optimization level for the Bisheng compiler. Supported values are ``1``, ``2``, ``3``.
+    Optimization level for the Bisheng compiler. Supported values are ``0``, ``1``, ``2``, ``3``.
     Typically, this parameter affects the ``-O`` argument of the command line for the compiler.
     """
 
@@ -271,7 +271,7 @@ class Compiler:
         is_core_type_valid = (self.options.kernel_type is None
                               or (isinstance(self.options.kernel_type, KernelType)
                                   and self.options.kernel_type.value <= 7 and self.options.kernel_type.value >= 0))
-        is_opt_level_valid = self.options.opt_level in [1, 2, 3]
+        is_opt_level_valid = (type(self.options.opt_level) is int and self.options.opt_level in [0, 1, 2, 3])
         return is_soc_version_valid and is_core_type_valid and is_opt_level_valid
 
     def _schedule_postprocessing(self, pm: passes.PassManager) -> None:
