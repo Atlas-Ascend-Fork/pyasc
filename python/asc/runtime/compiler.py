@@ -396,7 +396,7 @@ class Compiler:
             compile_cmds += ["-Xclang", f"-fcce-vf-vl={self.options.vf_vec_len}"]
         if self.options.auto_sync:
             compile_cmds += ["--cce-auto-sync", "-mllvm", "-api-deps-filter"]
-            if self.options.auto_sync_log != "":
+            if self.options.auto_sync_log not in (None, ""):
                 compile_cmds += ["-cce-auto-sync-log=%s" % self.options.auto_sync_log]
         if self.options.kernel_type in [KernelType.MIX_AIC_1_1, KernelType.MIX_AIC_1_2]:
             compile_cmds += ["-cce-enable-mix"]

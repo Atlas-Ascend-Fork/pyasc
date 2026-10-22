@@ -7,10 +7,11 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 
 from contextlib import contextmanager
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from asc.lib.runtime import CoreType
-from asc.runtime.compiler import CompileOptions, Compiler
+from asc.runtime.compiler import CompilationArch, CompileOptions, Compiler
 from asc.runtime import config
 import pytest
 
@@ -91,6 +92,21 @@ def test_invalid_compile_option():
     with pytest.raises(RuntimeError, match="Please check input compile option"):
         invalid_options = CompileOptions(opt_level=0)
         Compiler(invalid_options)
+
+
+@pytest.mark.parametrize("log_path, expected_option", [(None, None), ("", None),
+                                                       ("sync.log", "-cce-auto-sync-log=sync.log")])
+def test_auto_sync_log_is_only_passed_for_a_nonempty_path(log_path, expected_option):
+    compiler = object.__new__(Compiler)
+    compiler.options = CompileOptions(auto_sync_log=log_path)
+    compiler.arch = CompilationArch.C220
+    compiler.compiler = "bisheng"
+    compiler.enable_debug = False
+
+    command = compiler._get_compiler_cmd("dav-c220-vec", Path("kernel.cce"), Path("kernel.o"), [])
+    log_options = [option for option in command if option.startswith("-cce-auto-sync-log=")]
+
+    assert log_options == ([] if expected_option is None else [expected_option])
 
 
 def test_kernel_type_mix(mock_ir_module, mock_popen):

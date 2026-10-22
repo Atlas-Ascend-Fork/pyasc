@@ -32,7 +32,7 @@
 | kernel_type | KernelType \| None | None | 核类型。为 `None` 时由框架根据 IR 自动推导。取值见 [`KernelType`](config.md#kerneltype)。 |
 | opt_level | int | 3 | 毕昇优化级别，合法值为 `1`、`2`、`3`。 |
 | auto_sync | bool \| None | True | 是否开启毕昇 `--cce-auto-sync` 自动插入同步。 |
-| auto_sync_log | str \| None | `""` | 保存自动同步插入信息的文件路径。空字符串表示不落盘。 |
+| auto_sync_log | str \| None | `""` | 保存自动同步插入信息的文件路径。`None` 或空字符串表示不落盘。 |
 | bisheng_options | tuple[str, ...] \| None | None | 额外追加到毕昇编译命令的参数。 |
 | always_compile | bool | False | 跳过 JIT 二进制缓存，每次重新编译。 |
 | matmul_cube_only | bool | False | Matmul 是否按纯 Cube 模式编译（不含 Vector 核）。 |
