@@ -6,6 +6,8 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 
+import pytest
+
 import asc
 from asc.runtime import config
 from asc.runtime.jit import MockTensor
@@ -400,3 +402,30 @@ def test_cube_only(mock_launcher_run):
     workspace = MockTensor(asc.uint8)
     kernel_cube_only[1](x, workspace)
     assert mock_launcher_run.call_count == 1
+
+
+@pytest.mark.parametrize("api,args", [("get_tensor_c", ()), ("get_batch_tensor_c", (2, 2))])
+def test_matmul_get_result_returns_dispatched_tensor(monkeypatch, api, args):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from asc.language.adv import matmul as matmul_module
+
+    ir_result = object()
+    tensor_result = object()
+    builder = SimpleNamespace(
+        create_asc_MatmulGetTensorCReturnOp=Mock(return_value=ir_result),
+        create_asc_MatmulGetBatchTensorCOp=Mock(return_value=ir_result),
+    )
+    monkeypatch.setattr(matmul_module.global_builder, "get_ir_builder", lambda: builder)
+    monkeypatch.setattr(matmul_module.ir, "get_global_tensor_type", lambda dtype: dtype)
+    monkeypatch.setattr(matmul_module, "_mat", lambda value, dtype: SimpleNamespace(to_ir=lambda: value))
+    wrap_tensor = Mock(return_value=tensor_result)
+    monkeypatch.setattr(matmul_module, "GlobalTensor", wrap_tensor)
+    owner = matmul_module.Matmul(handle=object())
+    owner.c_dtype = SimpleNamespace(to_ir=lambda: object())
+
+    # Exercise the Python dispatcher without the outer JIT initialization guard.
+    result = getattr(matmul_module.Matmul, api).__wrapped__(owner, *args, sync=False)
+    assert result is tensor_result
+    wrap_tensor.assert_called_once_with(ir_result)

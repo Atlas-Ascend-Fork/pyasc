@@ -143,7 +143,7 @@ class Matmul(IRValue):
 
     @require_jit
     @set_matmul_docstring(api_name="get_tensor_c")
-    def get_tensor_c(self, *args, **kwargs) -> None:
+    def get_tensor_c(self, *args, **kwargs) -> Optional[GlobalTensor]:
         dispatcher = OverloadDispatcher(__name__)
         builder = global_builder.get_ir_builder()
 
@@ -186,7 +186,7 @@ class Matmul(IRValue):
                                                               _mat(sync, KT.bit).to_ir())
             return GlobalTensor(res)
 
-        dispatcher(*args, **kwargs)
+        return dispatcher(*args, **kwargs)
 
     @require_jit
     @set_matmul_docstring(api_name="init")
@@ -392,7 +392,7 @@ class Matmul(IRValue):
             builder.create_asc_MatmulGetBatchTensorCLocalMemOp(self.to_ir(), tensor.to_ir(), batch_a_value,
                                                                batch_b_value, en_sequential_write_value, sync_value)
 
-        dispatcher(*args, **kwargs)
+        return dispatcher(*args, **kwargs)
 
     @overload
     def set_tensor_a(self, scalar: int) -> None:
