@@ -16,14 +16,11 @@ repos:
       - id: clang-format
         types_or: [c++, c]
 
-  # OAT compliance check (Open Source Audit Tool)
-  - repo: local
+  # OAT compliance check (Open Source Audit Tool) - remote Python hook
+  - repo: https://gitcode.com/HiAgent/compliance
+    rev: v1.0.6
     hooks:
       - id: oat-check
-        name: OAT Compliance Check
-        entry: bash scripts/oat_check.sh
-        language: system
         pass_filenames: true
-        types: [file]
         stages: [pre-commit]
         verbose: true
