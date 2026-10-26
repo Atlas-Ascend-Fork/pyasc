@@ -67,6 +67,6 @@ def require_constexpr(obj: Union[ConstExpr, Any], *constraints: Type, arg_name: 
     constraint_union = constraints[0]
     for constraint in constraints:
         constraint_union = Union[constraint_union, constraint]
-    constraint_str = " | ".join(map(lambda t: t.__name__, get_args(constraint_union)))
+    constraint_str = " | ".join(map(lambda t: t.__name__, get_args(constraint_union) or (constraint_union, )))
     note = "" if arg_name is None else f" for '{arg_name}' argument"
     raise RuntimeError(f"ConstExpr[{constraint_str}] is required{note}, {obj.__class__.__name__} was provided: {obj}")
