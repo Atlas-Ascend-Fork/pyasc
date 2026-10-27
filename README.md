@@ -7,7 +7,7 @@
 ## 🚀概述
 
 pyasc是一种用于编写高效自定义算子的编程语言，原生支持python标准规范。基于pyasc编写的算子程序，通过编译器编译和运行时调度，运行在昇腾AI处理器上。  
-pyasc编程接口与Ascend C类库接口一一对应，旨在提供与Ascend C接口相同的编程能力，目前正逐步开放中。有关pyasc编程接口的支持范围和约束，请参考[Ascend C API](https://hiascend.com/document/redirect/CannCommunityAscendCApi)。对于编程所需的抽象硬件架构和编程模型的相关知识，请参考《[Ascend C算子开发](https://www.hiascend.com/document/redirect/CannCommunityOpdevAscendC)》。本项目支持的AI处理器包括：Ascend 910C、Ascend 910B。
+pyasc编程接口与Ascend C类库接口一一对应，旨在提供与Ascend C接口相同的编程能力，目前正逐步开放中。有关pyasc编程接口的支持范围和约束，请参考[Ascend C API](https://hiascend.com/document/redirect/CannCommunityAscendCApi)。对于编程所需的抽象硬件架构和编程模型的相关知识，请参考《[Ascend C算子开发](https://www.hiascend.com/document/redirect/CannCommunityOpdevAscendC)》。本项目支持的AI处理器包括：Atlas A3训练/推理产品、Atlas A2训练/推理产品。
 
 ## 🔍目录结构
 关键目录如下：
