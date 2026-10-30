@@ -408,13 +408,13 @@ class Matmul(IRValue):
         dispatcher = OverloadDispatcher(__name__)
         builder = global_builder.get_ir_builder()
 
-        @dispatcher.register(scalar=RuntimeInt)
+        @dispatcher.register_auto
         def _(scalar: RuntimeInt):
             check_type(self.a_dtype, [KT.half, KT.float_, KT.float16, KT.float32],
                        "Scalar type is not supported in set_tensor_a")
             builder.create_asc_MatmulSetTensorAScalarOp(self.to_ir(), _mat(scalar, self.a_dtype).to_ir())
 
-        @dispatcher.register(tensor=BaseTensor, transpose=DefaultValued(RuntimeBool, False))
+        @dispatcher.register_auto
         def _(tensor: BaseTensor, transpose: RuntimeBool = False):
             check_type(tensor.dtype, [KT.half, KT.float_, KT.int8, KT.float16, KT.float32],
                        "Tensor type is not supported in set_tensor_a")
@@ -437,13 +437,13 @@ class Matmul(IRValue):
         dispatcher = OverloadDispatcher(__name__)
         builder = global_builder.get_ir_builder()
 
-        @dispatcher.register(scalar=RuntimeInt)
+        @dispatcher.register_auto
         def _(scalar: RuntimeInt):
             check_type(self.b_dtype, [KT.half, KT.float_, KT.float16, KT.float32],
                        "Scalar type is not supported in set_tensor_b")
             builder.create_asc_MatmulSetTensorBScalarOp(self.to_ir(), _mat(scalar, self.b_dtype).to_ir())
 
-        @dispatcher.register(tensor=BaseTensor, transpose=DefaultValued(RuntimeBool, False))
+        @dispatcher.register_auto
         def _(tensor: BaseTensor, transpose: RuntimeBool = False):
             check_type(tensor.dtype, [KT.half, KT.float_, KT.int8, KT.float16, KT.float32],
                        "Tensor type is not supported in set_tensor_b")

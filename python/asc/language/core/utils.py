@@ -9,7 +9,7 @@
 from dataclasses import dataclass
 import functools
 import inspect
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar, Union, get_args, get_origin
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar, Union, get_args, get_origin, get_type_hints
 from typing_extensions import ParamSpec, TypeAlias
 
 from ..._C import ir
@@ -120,9 +120,10 @@ class OverloadDispatcher:
 
     def register_auto(self, fn: FnT, /) -> FnT:
         signature = inspect.signature(fn)
+        annotations = get_type_hints(fn)
         overload_args = {}
         for name, param in signature.parameters.items():
-            cur_arg_type = param.annotation
+            cur_arg_type = annotations.get(name, param.annotation)
             if cur_arg_type is inspect._empty:
                 raise ValueError(f"Parameter {name} of {fn.__name__} function does not have a type annotation")
             if param.default is not inspect._empty:

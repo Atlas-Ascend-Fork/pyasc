@@ -429,3 +429,26 @@ def test_matmul_get_result_returns_dispatched_tensor(monkeypatch, api, args):
     result = getattr(matmul_module.Matmul, api).__wrapped__(owner, *args, sync=False)
     assert result is tensor_result
     wrap_tensor.assert_called_once_with(ir_result)
+
+
+def test_set_tensor_auto_overloads(mock_launcher_run):
+
+    @asc.jit
+    def kernel_set_tensors(a: asc.GlobalAddress, b: asc.GlobalAddress, workspace: asc.GlobalAddress):
+        pipe = asc.TPipe()
+        a_type = asc.adv.MatmulType(position=asc.TPosition.GM, format=asc.CubeFormat.ND, dtype=asc.float16)
+        b_type = asc.adv.MatmulType(position=asc.TPosition.GM, format=asc.CubeFormat.ND, dtype=asc.float16)
+        c_type = asc.adv.MatmulType(position=asc.TPosition.GM, format=asc.CubeFormat.ND, dtype=asc.float16)
+        matmul = asc.adv.Matmul(a_type, b_type, c_type)
+        asc.adv.register_matmul(pipe, workspace, matmul)
+        a_global = asc.GlobalTensor()
+        b_global = asc.GlobalTensor()
+        a_global.set_global_buffer(a)
+        b_global.set_global_buffer(b)
+        matmul.set_tensor_a(a_global)
+        matmul.set_tensor_b(b_global, transpose=True)
+        matmul.set_tensor_a(scalar=8)
+        matmul.set_tensor_b(scalar=8)
+
+    kernel_set_tensors[1](MockTensor(asc.float16), MockTensor(asc.float16), MockTensor(asc.uint8))
+    assert mock_launcher_run.call_count == 1
