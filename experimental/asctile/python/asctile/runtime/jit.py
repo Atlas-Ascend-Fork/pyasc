@@ -13,6 +13,7 @@ from asc._C import ir
 from asc._C.libpyasc import asctile
 from asc.runtime.jit import JITFunction as JITFunctionBase
 
+from ..interpreter import interpreter_enabled
 from .codegen import FunctionVisitor
 from .compiler import Compiler
 from .custom_builtins import get_custom_builtins
@@ -59,6 +60,9 @@ def jit(fn: Optional[Callable[P, T]] = None, **options):
     options.setdefault("custom_builtins", get_custom_builtins())
 
     def decorator(fn: Callable[P, T]) -> JITFunction[P, T]:
+        if interpreter_enabled():
+            from ..interpreter.function import InterpretedFunction
+            return InterpretedFunction(fn, **options)
         return JITFunction(fn, **options)
 
     if fn is None:

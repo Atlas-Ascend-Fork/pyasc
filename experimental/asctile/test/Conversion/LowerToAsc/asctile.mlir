@@ -94,10 +94,10 @@ func.func @lower_broadcast(%arg0: tensor<1xf32, #asctile.local<UB>>, %arg1: tens
 // CHECK-LABEL: func.func @lower_softmax(%arg0: tensor<16xf32, #asctile.local<UB>>) -> tensor<16xf32, #asctile.local<UB>> {
 // CHECK:       %0 = builtin.unrealized_conversion_cast %arg0 : tensor<16xf32, #asctile.local<UB>> to !ascendc.local_tensor<16xf32>
 // CHECK-NEXT:  %1 = ascendc.local_tensor_auto veccalc() : <16xf32>
-// CHECK-NEXT:  %2 = ascendc.local_tensor_auto veccalc() : <128xui8>
+// CHECK-NEXT:  %2 = ascendc.local_tensor_auto veccalc() : <288xui8>
 // CHECK-NEXT:  %3 = ascendc.construct !ascendc.softmax_tiling()
 // CHECK-NEXT:  %4 = emitasc.init_struct !ascendc.softmax_shape_info("srcM" = %c1_i32 : i32, "srcK" = %c16_i32 : i32, "oriSrcM" = %c1_i32 : i32, "oriSrcK" = %c16_i32 : i32)
-// CHECK-NEXT:  ascendc.softmax %1, %0, %2, %3, %4 {operandSegmentSizes = array<i32: 1, 0, 0, 1, 1, 1, 1>} : !ascendc.local_tensor<16xf32>, !ascendc.local_tensor<16xf32>, !ascendc.local_tensor<128xui8>, !ascendc.softmax_tiling, !ascendc.softmax_shape_info
+// CHECK-NEXT:  ascendc.softmax %1, %0, %2, %3, %4 {operandSegmentSizes = array<i32: 1, 0, 0, 1, 1, 1, 1>} : !ascendc.local_tensor<16xf32>, !ascendc.local_tensor<16xf32>, !ascendc.local_tensor<288xui8>, !ascendc.softmax_tiling, !ascendc.softmax_shape_info
 // CHECK-NEXT:  %5 = builtin.unrealized_conversion_cast %1 : !ascendc.local_tensor<16xf32> to tensor<16xf32, #asctile.local<UB>>
 // CHECK-NEXT:  return %5 : tensor<16xf32, #asctile.local<UB>>
 // CHECK-NEXT:}
@@ -190,14 +190,14 @@ func.func @lower_reduce_prod(%arg0: tensor<64x32xf32, #asctile.local<UB>>) -> te
 // CHECK-NEXT:  %0 = builtin.unrealized_conversion_cast %arg1 : tensor<32xi32, #asctile.local<UB>> to !ascendc.local_tensor<32xi32>
 // CHECK-NEXT:  %1 = builtin.unrealized_conversion_cast %arg0 : tensor<32xf32, #asctile.local<UB>> to !ascendc.local_tensor<32xf32>
 // CHECK-NEXT:  %2 = ascendc.local_tensor_auto veccalc() : <32xf16>
-// CHECK-NEXT:  ascvf.vf_group dst(%2 : !ascendc.local_tensor<32xf16>) {
+// CHECK-NEXT:  ascvf.vf_group outs(%2 : !ascendc.local_tensor<32xf16>) {
 // CHECK-NEXT:    emitasc.vec_scope {
 // CHECK-NEXT:      emitasc.verbatim ";;; // $0" %2 : !ascendc.local_tensor<32xf16>
 // CHECK-NEXT:    }
 // CHECK-NEXT:  } {groupType = !ascendc.local_tensor<32xf16>}
 // CHECK-NEXT:  %3 = builtin.unrealized_conversion_cast %2 : !ascendc.local_tensor<32xf16> to tensor<32xf16, #asctile.local<UB>>
 // CHECK-NEXT:  %4 = ascendc.local_tensor_auto veccalc() : <32xi16>
-// CHECK-NEXT:  ascvf.vf_group dst(%4 : !ascendc.local_tensor<32xi16>) src(%1, %0 : !ascendc.local_tensor<32xf32>, !ascendc.local_tensor<32xi32>) {
+// CHECK-NEXT:  ascvf.vf_group outs(%4 : !ascendc.local_tensor<32xi16>) ins(%1, %0 : !ascendc.local_tensor<32xf32>, !ascendc.local_tensor<32xi32>) {
 // CHECK-NEXT:    emitasc.vec_scope {
 // CHECK-NEXT:      emitasc.verbatim ";;; // $0 $1 $2" %4, %1, %0 : !ascendc.local_tensor<32xi16>, !ascendc.local_tensor<32xf32>, !ascendc.local_tensor<32xi32>
 // CHECK-NEXT:    }

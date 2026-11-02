@@ -16,7 +16,7 @@
 // CHECK: ascendc.not_reg {{[^:]*}}: !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
 // CHECK: ascendc.relu_reg {{[^:]*}}: !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
 func.func @translate_unary_l2(%arg0: i32, %arg1: !ascendc.local_tensor<1024xf32>) {
-  ascvf.vf_group dst(%arg1 : !ascendc.local_tensor<1024xf32>) src(%arg1 : !ascendc.local_tensor<1024xf32>) {
+  ascvf.vf_group outs(%arg1 : !ascendc.local_tensor<1024xf32>) ins(%arg1 : !ascendc.local_tensor<1024xf32>) {
     ascendc.abs_l2 %arg1, %arg1, %arg0 : !ascendc.local_tensor<1024xf32>, !ascendc.local_tensor<1024xf32>, i32
     ascendc.exp_l2 %arg1, %arg1, %arg0 : !ascendc.local_tensor<1024xf32>, !ascendc.local_tensor<1024xf32>, i32
     ascendc.ln_l2 %arg1, %arg1, %arg0 : !ascendc.local_tensor<1024xf32>, !ascendc.local_tensor<1024xf32>, i32
@@ -39,7 +39,7 @@ func.func @translate_unary_l2(%arg0: i32, %arg1: !ascendc.local_tensor<1024xf32>
 // CHECK: ascendc.or_reg {{[^:]*}}: !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
 // CHECK: ascendc.prelu_reg {{[^:]*}}: !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
 func.func @translate_binary_l2(%arg0: i32, %arg1: !ascendc.local_tensor<1024xf32>) {
-  ascvf.vf_group dst(%arg1 : !ascendc.local_tensor<1024xf32>) src(%arg1 : !ascendc.local_tensor<1024xf32>) {
+  ascvf.vf_group outs(%arg1 : !ascendc.local_tensor<1024xf32>) ins(%arg1 : !ascendc.local_tensor<1024xf32>) {
     ascendc.add_l2 %arg1, %arg1, %arg1, %arg0 : !ascendc.local_tensor<1024xf32>, !ascendc.local_tensor<1024xf32>, !ascendc.local_tensor<1024xf32>, i32
     ascendc.and_l2 %arg1, %arg1, %arg1, %arg0 : !ascendc.local_tensor<1024xf32>, !ascendc.local_tensor<1024xf32>, !ascendc.local_tensor<1024xf32>, i32
     ascendc.div_l2 %arg1, %arg1, %arg1, %arg0 : !ascendc.local_tensor<1024xf32>, !ascendc.local_tensor<1024xf32>, !ascendc.local_tensor<1024xf32>, i32
@@ -64,7 +64,7 @@ func.func @translate_binary_l2(%arg0: i32, %arg1: !ascendc.local_tensor<1024xf32
 // CHECK: ascendc.shift_lefts_reg
 // CHECK: ascendc.shift_rights_reg
 func.func @translate_vec_scalar_l2(%arg0: i32, %arg1: !ascendc.local_tensor<1024xf32>, %arg2: f32) {
-  ascvf.vf_group dst(%arg1 : !ascendc.local_tensor<1024xf32>) src(%arg1 : !ascendc.local_tensor<1024xf32>) {
+  ascvf.vf_group outs(%arg1 : !ascendc.local_tensor<1024xf32>) ins(%arg1 : !ascendc.local_tensor<1024xf32>) {
     ascendc.adds_l2 %arg1, %arg1, %arg2, %arg0 : !ascendc.local_tensor<1024xf32>, !ascendc.local_tensor<1024xf32>, f32, i32
     ascendc.leaky_relu_l2 %arg1, %arg1, %arg2, %arg0 : !ascendc.local_tensor<1024xf32>, !ascendc.local_tensor<1024xf32>, f32, i32
     ascendc.leaky_relu_l2 %arg1, %arg1, %arg2, %arg0 : !ascendc.local_tensor<1024xf32>, !ascendc.local_tensor<1024xf32>, f32, i32
@@ -78,10 +78,10 @@ func.func @translate_vec_scalar_l2(%arg0: i32, %arg1: !ascendc.local_tensor<1024
 }
 
 // CHECK-LABEL: func.func @translate_mask_ops
-// CHECK: ascendc.compare_scalar_reg
+// CHECK: ascendc.compare_reg
 // CHECK: ascendc.select_reg
 func.func @translate_mask_ops(%arg0: i64, %arg1: !ascendc.local_tensor<96xui8>, %arg2: !ascendc.local_tensor<768xf16>, %arg3: f16) {
-  ascvf.vf_group dst(%arg1, %arg2 : !ascendc.local_tensor<96xui8>, !ascendc.local_tensor<768xf16>) src(%arg2 : !ascendc.local_tensor<768xf16>) {
+  ascvf.vf_group outs(%arg1, %arg2 : !ascendc.local_tensor<96xui8>, !ascendc.local_tensor<768xf16>) ins(%arg2 : !ascendc.local_tensor<768xf16>) {
     ascendc.compare_scalar_l2 %arg1, %arg2, %arg3, %arg0 {asc.reuse_group = 0 : i64, cmpMode = 5 : i64} : !ascendc.local_tensor<96xui8>, !ascendc.local_tensor<768xf16>, f16, i64
     ascendc.select_l2 %arg2, %arg1, %arg2, %arg2, %arg0 {asc.reuse_group = 0 : i64, selMode = 2 : i32} : !ascendc.local_tensor<768xf16>, !ascendc.local_tensor<96xui8>, !ascendc.local_tensor<768xf16>, !ascendc.local_tensor<768xf16>, i64
   } {groupType = !ascendc.local_tensor<768xf16>}
@@ -95,10 +95,24 @@ func.func @translate_mask_ops(%arg0: i64, %arg1: !ascendc.local_tensor<96xui8>, 
 // CHECK-NOT: ascendc.get_vec_len
 module attributes {asc.vf_vec_len = 256 : i32} {
   func.func @known_vec_len(%arg5: !ascendc.local_tensor<1024xf32>, %arg6: i64) {
-    ascvf.vf_group dst(%arg5 : !ascendc.local_tensor<1024xf32>) src(%arg5 : !ascendc.local_tensor<1024xf32>) {
+    ascvf.vf_group outs(%arg5 : !ascendc.local_tensor<1024xf32>) ins(%arg5 : !ascendc.local_tensor<1024xf32>) {
       ascendc.exp_l2 %arg5, %arg5, %arg6 : !ascendc.local_tensor<1024xf32>, !ascendc.local_tensor<1024xf32>, i64
       ascendc.exp_l2 %arg5, %arg5, %arg6 : !ascendc.local_tensor<1024xf32>, !ascendc.local_tensor<1024xf32>, i64
     } {groupType = !ascendc.local_tensor<1024xf32>}
     return
   }
+}
+
+// CHECK-LABEL: func.func @translate_row_broadcast
+// CHECK: emitasc.vf_for %c96 : index {
+// CHECK:   emitasc.vf_for
+// CHECK:   ascendc.update_mask
+// CHECK:   ascvf.load {{.*}} : !ascendc.reg_tensor<f32>, <1x16xf32>, index, !ascendc.mask_reg
+// CHECK-NOT: ascendc.duplicate_reg
+// CHECK:   ascvf.store {{.*}} : <96x16xf32>, index, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
+func.func @translate_row_broadcast(%c0: i32, %dst: !ascendc.local_tensor<96x16xf32>, %src: !ascendc.local_tensor<1x16xf32>) {
+  ascvf.vf_group outs(%dst : !ascendc.local_tensor<96x16xf32>) ins(%src : !ascendc.local_tensor<1x16xf32>) {
+    ascendc.broadcast %dst, %src, %c0, %c0, %c0, %c0, %c0, %c0 {operandSegmentSizes = array<i32: 1, 1, 3, 3>} : !ascendc.local_tensor<96x16xf32>, !ascendc.local_tensor<1x16xf32>, i32, i32, i32, i32, i32, i32
+  } {groupType = !ascendc.local_tensor<96x16xf32>}
+  return
 }

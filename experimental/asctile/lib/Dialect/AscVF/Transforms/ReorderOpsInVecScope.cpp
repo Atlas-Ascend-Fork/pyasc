@@ -40,7 +40,7 @@ Order getOrder(Operation* op)
             arith::AddIOp, arith::SubIOp, arith::DivSIOp, arith::CeilDivSIOp, arith::MulIOp, arith::RemSIOp,
             arith::CmpIOp, emitasc::VariableOp, ascendc::GetVecLenOp, arith::IndexCastOp>(
             [](auto) { return Order::Expr; })
-        .Case([](ascendc::RegTensorOp) { return Order::RegTensorOp; })
+        .Case<ascendc::RegTensorOp, ascendc::MaskRegOp, ascendc::UnalignRegOp>([](auto) { return Order::RegTensorOp; })
         .Default([](auto) { return Order::Any; });
 }
 

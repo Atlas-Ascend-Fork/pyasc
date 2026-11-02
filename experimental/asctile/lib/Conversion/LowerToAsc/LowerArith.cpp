@@ -78,8 +78,13 @@ struct ConvertBitcast : public ConvertOp<arith::BitcastOp> {
 
     LogicalResult matchAndRewrite(arith::BitcastOp op, ConvertRewriter& rewriter) const override
     {
-        rewriter.replaceOpWithNewOp<ascendc::LocalTensorReinterpretCastOp>(
-            op, typeConverter->convertType(op.getType()), rewriter.getRemappedValue(op.getIn()));
+        if (isa<asctile::LocalTensorType>(op.getType())) {
+            rewriter.replaceOpWithNewOp<ascendc::LocalTensorReinterpretCastOp>(
+                op, typeConverter->convertType(op.getType()), rewriter.getRemappedValue(op.getIn()));
+        } else if (isa<asctile::GlobalTensorType>(op.getType())) {
+            rewriter.replaceOpWithNewOp<ascendc::GlobalTensorReinterpretCastOp>(
+                op, typeConverter->convertType(op.getType()), rewriter.getRemappedValue(op.getIn()));
+        }
         return success();
     }
 };

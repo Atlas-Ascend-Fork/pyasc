@@ -86,6 +86,32 @@ OpFoldResult GlobalTensorSubIndexOp::fold([[maybe_unused]] FoldAdaptor adaptor)
 }
 
 //===----------------------------------------------------------------------===//
+// GlobalTensorReinterpretCastOp
+//===----------------------------------------------------------------------===//
+
+bool GlobalTensorReinterpretCastOp::areCastCompatible(TypeRange inputs, TypeRange outputs)
+{
+    return inputs.size() == 1 && outputs.size() == 1 && isa<GlobalTensorType>(inputs[0]) &&
+           isa<GlobalTensorType>(outputs[0]);
+}
+
+OpFoldResult GlobalTensorReinterpretCastOp::fold([[maybe_unused]] FoldAdaptor adaptor)
+{
+    Value in = getIn();
+    Type resultType = getResult().getType();
+    if (in.getType() == resultType)
+        return in;
+    if (auto defOp = in.getDefiningOp<GlobalTensorReinterpretCastOp>()) {
+        Value defIn = defOp.getIn();
+        if (resultType == defIn.getType())
+            return defIn;
+        setOperand(defIn);
+        return getResult();
+    }
+    return {};
+}
+
+//===----------------------------------------------------------------------===//
 // LocalTensorOp
 //===----------------------------------------------------------------------===//
 

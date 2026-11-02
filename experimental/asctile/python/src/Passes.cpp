@@ -86,6 +86,7 @@ void defineAscTilePasses(py::module& mod)
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_merge_cv_groups", createMergeCVGroupsPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_prepare_cv_strategy", createPrepareCVStrategyPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_promote_pure_operations", createPromotePureOpsPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_replace_fp8_ops", createReplaceFp8OpsPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_resolve_auto_location", createResolveAutoLocationPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_split_cube_load", createSplitCubeLoadPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_transform_math_ops", createTransformMathOpsPass);
@@ -106,6 +107,7 @@ void defineAscVFPasses(py::module& mod)
     using namespace ascvf;
     using namespace pybind11::literals;
     auto m = mod.def_submodule("ascvf");
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_canonicalize_vf_group", createCanonicalizeVFGroupPass);
     DEFINE_ADD_PASS("add_dispatch_vf_fusion", createDispatchVFFusionPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_eliminate_common_mask", createEliminateCommonMaskPass);
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_erase_barrier", createEraseBarrierPass);

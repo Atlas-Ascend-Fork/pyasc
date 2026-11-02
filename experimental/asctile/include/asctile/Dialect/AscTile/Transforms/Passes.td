@@ -363,6 +363,33 @@ def PromotePureOps : Pass<"asctile-promote-pure-ops", "func::FuncOp"> {
   }];
 }
 
+def ReplaceFp8Ops : Pass<"asctile-replace-fp8-ops", "func::FuncOp"> {
+    let summary = "Replace tile operations with fp8e8m0, fp8e2m5, fp8e4m3 to int8 when possible";
+    let constructor = "mlir::asctile::createReplaceFp8OpsPass()";
+    let dependentDialects = ["asctile::AscTileDialect", "emitasc::EmitAscDialect"];
+    let description = [{
+      Replace operation used `float8_e5m2` or `float8_e4m3fn` types by same with int8.
+      Inserts casting operations before to change operands to int8 and changes results back
+      to original type.
+      Use `arith::BitcastOp` to change tensor or scalar operands.
+      Following operations are modified: `asctile.LoadOp`, 
+      `asctile.StoreOp`, `asctile.TransposeOp`, `asctile::BroadcastOp`, `arith::ConstantOp`
+      Example:
+      ```
+      ///Before:
+        %4 = asctile.transpose %2, [1 : i32, 2 : i32, 0 : i32, 3 : i32] : tensor<2x3x4x128xf8E4M3FN, #asctile.local<UB>> to tensor<3x4x2x128xf8E4M3FN, #asctile.local<UB>> 
+        asctile.store %4, %3[%c0_i32, %c0_i32, %c2_i32, %c0_i32] : tensor<3x4x2x128xf8E4M3FN, #asctile.local<UB>>, tensor<4x4x4x128xf8E4M3FN, #asctile.global>
+      //After:
+        %5 = arith.bitcast %4 : tensor<2x3x4x128xf8E4M3FN, #asctile.local<UB>> to tensor<2x3x4x128xi8, #asctile.local<UB>> 
+        %6 = asctile.transpose %5, [1 : i32, 2 : i32, 0 : i32, 3 : i32] : tensor<2x3x4x128xi8, #asctile.local<UB>> to tensor<3x4x2x128xi8, #asctile.local<UB>>
+        %7 = arith.bitcast %6 : tensor<3x4x2x128xi8, #asctile.local<UB>> to tensor<3x4x2x128xf8E4M3FN, #asctile.local<UB>>
+        %8 = arith.bitcast %7 : tensor<3x4x2x128xf8E4M3FN, #asctile.local<UB>> to tensor<3x4x2x128xi8, #asctile.local<UB>>
+        %10 = arith.bitcast %arg1 : tensor<4x4x4x128xf8E4M3FN, #asctile.global>, tensor<4x4x4x128xi8, #asctile.global>
+        asctile.store %8, %10[%c0_i32, %c0_i32, %c2_i32, %c0_i32] : tensor<3x4x2x128xi8, #asctile.local<UB>>, tensor<4x4x4x128xi8, #asctile.global>
+      ```
+    }];
+}
+
 def ResolveAutoLocation : Pass<"asctile-resolve-auto-location", "func::FuncOp"> {
   let summary = "Resolve Auto tensor locations to concrete memory locations inferred from usage context";
   let constructor = "mlir::asctile::createResolveAutoLocationPass()";

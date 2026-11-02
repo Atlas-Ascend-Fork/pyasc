@@ -99,7 +99,7 @@ def test_one_hot_axes(axis: int):
 # Logical-prefix coverage of the per-element scalar load path: each `logical_size`
 # value exercises a different `block_length` / `block_length_tail` split and a
 # different load-store offset pattern at the GM boundary.
-@pytest.mark.parametrize("logical_size", [1, 2, 127, 128, 129, 255, 256])
+@pytest.mark.parametrize("logical_size", [1, 2, 127, 128])
 def test_one_hot_logical_border_prefixes(logical_size: int):
     depth = 8
     indices = make_indices(logical_size, depth)

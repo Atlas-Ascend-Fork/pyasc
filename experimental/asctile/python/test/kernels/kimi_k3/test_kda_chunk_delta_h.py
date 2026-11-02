@@ -35,4 +35,5 @@ from ...target.kimi_k3.test_kda_chunk_delta_h import run_kda_chunk_delta_h_test
 def test_kda_chunk_delta_h(profiler, runs, b, t, h, hg, k, v, bt, bv, dtype, use_g, use_gk, use_initial_state,
                            save_new_value, is_varlen, use_exp2, base_k, unroll_factor_k, reuse_alloc):
     run_kda_chunk_delta_h_test(profiler, runs, b, t, h, hg, k, v, bt, bv, dtype, use_g, use_gk, use_initial_state,
-                               save_new_value, is_varlen, use_exp2, base_k, unroll_factor_k, reuse_alloc)
+                               save_new_value, is_varlen, use_exp2, base_k, unroll_factor_k, reuse_alloc,
+                               always_compile=True)

@@ -70,6 +70,8 @@ def constant_tile(value: Real, shape: TensorShape, dtype: DataType,
         "bfloat16": builder.get_bf16_attr,
         "float32": builder.get_f32_attr,
         "float64": builder.get_f64_attr,
+        "float8_e4m3fn": builder.get_f8e4m3fn_attr,
+        "float8_e5m2": builder.get_f8e5m2_attr,
     }
     attr_builder = attr_builders.get(str(dtype))
     if attr_builder is None:

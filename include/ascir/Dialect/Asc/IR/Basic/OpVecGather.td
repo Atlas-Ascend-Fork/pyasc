@@ -47,10 +47,13 @@ def AscendC_GatherL1Op : VectorOp<"gather_l1", "Gather", [OpWithDstInterface]> {
                          AnyType:$srcRepStride);
 }
 
-def AscendC_GatherL2Op : VectorOp<"gather_l2", "Gather", [OpWithDstInterface]> {
+def AscendC_GatherL2Op : VectorOp<"gather_l2", "Gather", [OpWithDstInterface, OpWithSrcInterface]> {
     let description = "Gather elements from source tensor (L2 API)";
     let arguments = (ins AscendC_LocalTensor:$dst, AscendC_LocalTensor:$src,
                          AscendC_LocalTensor:$srcOffset, AnyType:$srcBaseAddr,
                          AnyType:$count);
+    let extraClassDeclaration = extraClassDeclarationBase # [{
+        SmallVector<Value> getSrcTensors() { return {getSrc(), getSrcOffset()}; }
+    }];
 }
 #endif //ASC_BASIC_OP_GATHER_TD

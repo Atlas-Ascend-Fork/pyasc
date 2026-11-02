@@ -102,7 +102,13 @@ def SelectRegOp : RegOp<"select_reg", "Select"> {
 
 def CompareScalarRegOp : RegOp<"compare_scalar_reg", "CompareScalar"> {
   let arguments = (ins AscendC_MaskReg:$dstReg, AscendC_RegTensor:$srcReg,
-                       AnyType:$scalar, AscendC_MaskReg:$maskReg, 
+                       AnyType:$scalar, AscendC_MaskReg:$maskReg,
+                       AscendC_CMPMODEAttr:$cmpMode);
+}
+
+def CompareRegOp : RegOp<"compare_reg", "Compare"> {
+  let arguments = (ins AscendC_MaskReg:$dstReg, AscendC_RegTensor:$src0Reg,
+                       AscendC_RegTensor:$src1Reg, AscendC_MaskReg:$maskReg,
                        AscendC_CMPMODEAttr:$cmpMode);
 }
 
@@ -136,8 +142,8 @@ def StoreUnAlignOp : RegOp<"vst_unalign_reg", "StoreUnAlign", [AscFunc]> {
 }
 
 def StoreUnAlignPostOp : RegOp<"vst_unalign_post_reg", "StoreUnAlignPost", [AscFunc]> {
-  let arguments = (ins AnyRankedOrUnrankedMemRef:$dst,
-                       AscendC_UnalignReg:$ureg);
+  let arguments = (ins AnyRankedOrUnrankedMemRef:$dst, AscendC_UnalignReg:$ureg,
+                       Optional<AnySignlessIntegerOrIndex>:$postStride);
 }
 
 def MaskGenWithRegTensorOp : RegOp<"mask_gen_with_reg_tensor", "MaskGenWithRegTensor"> {

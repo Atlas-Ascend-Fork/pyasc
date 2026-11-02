@@ -9,8 +9,12 @@
 from asc.experimental import asctile
 import pytest
 import torch
+from .helpers import assert_close
 
-supported_dtypes = [torch.int8, torch.int16, torch.int32, torch.int64, torch.float16, torch.bfloat16, torch.float32]
+supported_dtypes = [
+    torch.int8, torch.int16, torch.int32, torch.int64, torch.float16, torch.bfloat16, torch.float32, torch.float8_e5m2,
+    torch.float8_e4m3fn
+]
 
 
 @pytest.mark.parametrize("dtype", supported_dtypes)
@@ -32,12 +36,14 @@ def test_full_1d(require_c310, dtype: torch.dtype):
     out = torch.zeros(shape, dtype=dtype)
     kernel[1](out, shape, fill_value)
     expected = torch.full(shape, fill_value, dtype=dtype)
-    torch.testing.assert_close(out, expected)
+    assert_close(out, expected)
 
 
-@pytest.mark.parametrize("dtype", [torch.float16, torch.float32, torch.int32])
-def test_full_2d(dtype: torch.dtype):
-    last_dim = 16 if dtype == torch.float16 else 8
+@pytest.mark.parametrize("dtype", [torch.float16, torch.float32, torch.int32, torch.float8_e5m2, torch.float8_e4m3fn])
+def test_full_2d(require_c310, dtype: torch.dtype):
+    if dtype in (torch.float8_e5m2, torch.float8_e4m3fn):
+        require_c310()
+    last_dim = 32 // torch.tensor([], dtype=dtype).element_size()
     shape = [4, last_dim]
     fill_value = 2.5 if dtype.is_floating_point else 5
 
@@ -50,7 +56,7 @@ def test_full_2d(dtype: torch.dtype):
     out = torch.zeros(shape, dtype=dtype)
     kernel[1](out, shape, fill_value)
     expected = torch.full(shape, fill_value, dtype=dtype)
-    torch.testing.assert_close(out, expected)
+    assert_close(out, expected)
 
 
 @pytest.mark.parametrize("dtype", supported_dtypes)
@@ -73,7 +79,7 @@ def test_full_like(require_c310, dtype: torch.dtype):
     out = torch.zeros(shape, dtype=dtype)
     kernel[1](inp, out, shape, fill_value)
     expected = torch.full(shape, fill_value, dtype=dtype)
-    torch.testing.assert_close(out, expected)
+    assert_close(out, expected)
 
 
 def test_full_like_2d():
@@ -91,7 +97,7 @@ def test_full_like_2d():
     out = torch.zeros(shape, dtype=torch.int32)
     kernel[1](inp, out, shape)
     expected = torch.full(shape, 7, dtype=torch.int32)
-    torch.testing.assert_close(out, expected)
+    assert_close(out, expected)
 
 
 @pytest.mark.parametrize("dtype", supported_dtypes)
@@ -110,12 +116,14 @@ def test_zeros_1d(require_c310, dtype: torch.dtype):
     out = torch.ones(shape, dtype=dtype)
     kernel[1](out, shape)
     expected = torch.zeros(shape, dtype=dtype)
-    torch.testing.assert_close(out, expected)
+    assert_close(out, expected)
 
 
-@pytest.mark.parametrize("dtype", [torch.float16, torch.float32, torch.int32])
-def test_zeros_2d(dtype: torch.dtype):
-    last_dim = 16 if dtype == torch.float16 else 8
+@pytest.mark.parametrize("dtype", [torch.float16, torch.float32, torch.int32, torch.float8_e5m2, torch.float8_e4m3fn])
+def test_zeros_2d(require_c310, dtype: torch.dtype):
+    if dtype in (torch.float8_e5m2, torch.float8_e4m3fn):
+        require_c310()
+    last_dim = 32 // torch.tensor([], dtype=dtype).element_size()
     shape = [4, last_dim]
 
     @asctile.jit(always_compile=True)
@@ -127,7 +135,7 @@ def test_zeros_2d(dtype: torch.dtype):
     out = torch.ones(shape, dtype=dtype)
     kernel[1](out, shape)
     expected = torch.zeros(shape, dtype=dtype)
-    torch.testing.assert_close(out, expected)
+    assert_close(out, expected)
 
 
 def test_zeros_default_dtype():
@@ -142,7 +150,7 @@ def test_zeros_default_dtype():
     out = torch.ones(shape, dtype=torch.int32)
     kernel[1](out, shape)
     expected = torch.zeros(shape, dtype=torch.int32)
-    torch.testing.assert_close(out, expected)
+    assert_close(out, expected)
 
 
 @pytest.mark.parametrize("dtype", supported_dtypes)
@@ -164,7 +172,7 @@ def test_zeros_like(require_c310, dtype: torch.dtype):
     out = torch.ones(shape, dtype=dtype)
     kernel[1](inp, out, shape)
     expected = torch.zeros(shape, dtype=dtype)
-    torch.testing.assert_close(out, expected)
+    assert_close(out, expected)
 
 
 def test_zeros_like_2d():
@@ -182,7 +190,7 @@ def test_zeros_like_2d():
     out = torch.ones(shape, dtype=torch.float32)
     kernel[1](inp, out, shape)
     expected = torch.zeros(shape, dtype=torch.float32)
-    torch.testing.assert_close(out, expected)
+    assert_close(out, expected)
 
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float32, torch.int32])
@@ -208,7 +216,7 @@ def test_concat_two_tiles_1d(require_c310, dtype: torch.dtype):
     out = torch.zeros(out_shape, dtype=dtype)
     kernel[1](a, b, out, shape_a, shape_b, out_shape)
     expected = torch.cat([a, b])
-    torch.testing.assert_close(out, expected)
+    assert_close(out, expected)
 
 
 def test_concat_three_tiles_1d(require_c310):
@@ -237,7 +245,7 @@ def test_concat_three_tiles_1d(require_c310):
     out = torch.zeros(out_shape, dtype=torch.float32)
     kernel[1](a, b, c, out, shape_a, shape_b, shape_c, out_shape)
     expected = torch.cat([a, b, c])
-    torch.testing.assert_close(out, expected)
+    assert_close(out, expected)
 
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.float32, torch.int32])
@@ -264,7 +272,7 @@ def test_concat_two_tiles_2d(require_c310, dtype: torch.dtype):
     out = torch.zeros(out_shape, dtype=dtype)
     kernel[1](a, b, out, shape_a, shape_b, out_shape)
     expected = torch.cat([a, b], dim=0)
-    torch.testing.assert_close(out, expected)
+    assert_close(out, expected)
 
 
 def test_concat_different_first_dim(require_c310):
@@ -289,4 +297,4 @@ def test_concat_different_first_dim(require_c310):
     out = torch.zeros(out_shape, dtype=torch.float32)
     kernel[1](a, b, out, shape_a, shape_b, out_shape)
     expected = torch.cat([a, b])
-    torch.testing.assert_close(out, expected)
+    assert_close(out, expected)

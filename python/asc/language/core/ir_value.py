@@ -422,25 +422,12 @@ def materialize_ir_value(value: RuntimeNumeric, required_type: Optional[DataType
 
 def convert_value(value: Real, required_type: DataType) -> PlainValue:
     builder = global_builder.get_ir_builder()
-    type_to_builder = {
-        "int1": builder.get_i1,
-        "int8": builder.get_i8,
-        "int16": builder.get_i16,
-        "int32": builder.get_i32,
-        "int64": builder.get_i64,
-        "uint8": builder.get_ui8,
-        "uint16": builder.get_ui16,
-        "uint32": builder.get_ui32,
-        "uint64": builder.get_ui64,
-        "float16": builder.get_f16,
-        "bfloat16": builder.get_bf16,
-        "float32": builder.get_f32,
-        "float64": builder.get_f64,
-    }
-    if required_type.name not in type_to_builder:
-        raise RuntimeError(f"Unsupported dtype for materialization: {required_type}")
-    factory = type_to_builder[required_type.name]
-    return PlainValue(factory(value))
+    try:
+        factory_name = required_type.support_types[required_type.name].value_factory
+        factory = getattr(builder, factory_name)
+        return PlainValue(factory(value))
+    except (IndexError, TypeError):
+        raise RuntimeError(f"Unsupported dtype for materialization: {required_type}") from None
 
 
 def cast_to_index(value: Union[RuntimeNumeric, IRHandle]) -> IRHandle:

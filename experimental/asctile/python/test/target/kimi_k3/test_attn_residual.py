@@ -13,7 +13,7 @@ import pytest
 import torch
 
 
-@asctile.jit(reuse_alloc=2)
+@asctile.jit(reuse_alloc=2, vf_fusion=True)
 def attn_residual_kernel(prefix_ptr: asctile.GlobalAddress, bank_ptr: asctile.GlobalAddress,
                          combined_weight_ptr: asctile.GlobalAddress, indices_ptr: asctile.GlobalAddress,
                          output_ptr: asctile.GlobalAddress, num_tokens, num_valid_blocks,

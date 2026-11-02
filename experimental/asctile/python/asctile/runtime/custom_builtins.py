@@ -15,6 +15,7 @@ from typing import Any, Callable, Iterable, List, Optional, Tuple, Union
 from asc.codegen.function_visitor import CustomBuiltins
 from asc.language.core.ir_value import PlainValue, RuntimeNumeric
 
+from ..interpreter import interpreter_enabled
 from ..language.binary_ops import maximum, minimum
 from ..language.debug_ops import device_assert, device_print
 from ..language.range import range as custom_range
@@ -109,9 +110,14 @@ def custom_print(*values: object, sep: Optional[str] = None, end: Optional[str] 
     device_print(*values, sep=sep, end=end)
 
 
+def custom_breakpoint(*args: Any, **kwargs: Any) -> None:
+    return None
+
+
 def get_custom_builtins() -> CustomBuiltins:
     return CustomBuiltins({
         "assert": custom_assert,
+        "breakpoint": custom_breakpoint if interpreter_enabled() else breakpoint,
         "max": custom_max,
         "min": custom_min,
         "print": custom_print,

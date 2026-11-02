@@ -56,7 +56,8 @@ def full(shape: Iterable[int], value: RuntimeNumeric, dtype: Optional[DataType] 
     """
     check_type("value", value, RuntimeNumeric)
     check_type("dtype", dtype, Optional[DataType])
-    support_dtypes = (KT.int8, KT.int16, KT.int32, KT.int64, KT.float16, KT.bfloat16, KT.float32)
+    support_dtypes = (KT.int8, KT.int16, KT.int32, KT.int64, KT.float16, KT.bfloat16, KT.float32, KT.float8_e4m3fn,
+                      KT.float8_e5m2)
     check_dtype("dtype", dtype, support_dtypes, optional=True)
     shape = verify_shape(shape)
     if isinstance(value, Real):

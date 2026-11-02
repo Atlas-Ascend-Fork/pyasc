@@ -6,7 +6,8 @@
 # INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
 # See LICENSE in the root of the software repository for the full text of the License.
 
-from typing import Any, Iterable, Optional, Protocol, Tuple, Type, TypeGuard, Union
+from typing import Any, Iterable, Optional, Protocol, Tuple, Type, Union
+from typing_extensions import TypeGuard
 
 from asc.common.compat import isinstance
 from asc.language.core.dtype import DataType

@@ -17,6 +17,30 @@ Build from source
 Prerequisites
 -------------
 
+Install build dependencies
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- ``git`` (required to download the source code)
+- ``gcc`` or ``clang`` compiler and the compatible linker
+- ``python3`` with development packages
+- ``zlib`` (required for LLVM libraries)
+- ``ccache`` (can be installed to speed up the compilation)
+
++----------------+--------------------------------------------------------------------------------------+
+| Linux distro   + Install recommended packages using the system package manager                        |
++================+======================================================================================+
+| Debian/Ubuntu  | .. code-block:: bash                                                                 |
+|                |                                                                                      |
+|                |    sudo apt update                                                                   |
+|                |    sudo apt install git ccache clang lld python3 python3-pip python3-venv zlib1g-dev |
++----------------+--------------------------------------------------------------------------------------+
+| CentOS/EulerOS | .. code-block:: bash                                                                 |
+|                |                                                                                      |
+|                |    sudo dnf update                                                                   |
+|                |    sudo dnf install git python3 python3-devel python3-pip clang lld zlib-devel       |
++----------------+--------------------------------------------------------------------------------------+
+
+
 Obtain the source code
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -37,24 +61,8 @@ It is recommended to activate `a virtual environment <https://docs.python.org/3/
 
 .. code-block:: bash
 
-    python3 -m pip install virtualenv
-    python3 -m virtualenv $HOME/.pyasc_venv --prompt pyasc
+    python3 -m venv $HOME/.pyasc_venv --prompt pyasc
     source $HOME/.pyasc_venv/bin/activate
-
-
-Install build dependencies
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-PyAsc requires either ``gcc`` or ``clang`` compiler and the compatible linker.
-Optionally, ``ccache`` can be installed to speed up the development flow.
-
-.. hint::
-
-    On Ubuntu, these packages can be installed from apt:
-
-    .. code-block:: bash
-
-        sudo apt install build-essential ccache clang lld
 
 
 Build and install
@@ -72,39 +80,51 @@ The following environment variables can be **exported** to configure the install
 ``PYASC_SETUP_CCACHE=1`` (optional)
     enable ccache to speed up the repetitive build flow
 
+``PYASC_SETUP_CLANG_LLD=1`` (optional)
+    use ``clang++`` and ``lld`` unless ``PYASC_SETUP_COMPILER`` or ``PYASC_SETUP_LINKER`` is set
+
 ``PYASC_SETUP_EXPERIMENTAL=1`` (optional)
     enable the compilation and packaging of experimental modules (including ``asctile``)
+
+    .. attention::
+
+        Remember to set ``PYASC_SETUP_EXPERIMENTAL=1`` if the **AscTile** module is required.
+        Otherwise, its installation will be skipped and ``from asc.experimental import asctile`` won't work.
 
 ``PYASC_SETUP_JOBS=<num>`` (optional)
     number of build jobs (default: number of available CPU cores)
 
-.. raw:: html
+.. spoiler:: Additional environment variables
 
-    <details>
-        <summary><strong>Additional environment variables</strong></summary>
+   ``PYASC_SETUP_ASAN=1`` (optional)
+       enable AddressSanitizer for the C++ build
 
-``PYASC_SETUP_BUILD_DIR=<path>`` (optional)
-    provide the directory for the temporary build files (default: ``build``)
+   ``PYASC_SETUP_BUILD_DIR=<path>`` (optional)
+       provide the directory for the temporary build files (default: ``build``)
 
-``PYASC_SETUP_COMPILER=<bin>`` (optional)
-    name or path of the compiler executable (default: system compiler, recommended: ``clang++``)
+   ``PYASC_SETUP_CMAKE_APPEND=<args>`` (optional)
+       append additional CMake configure arguments; the value is shell-split before use
 
-``PYASC_SETUP_CONFIG=<config>`` (optional)
-    build configuration for CMake (default: ``Release``)
+   ``PYASC_SETUP_COMPILER=<bin>`` (optional)
+       name or path of the compiler executable (default: system compiler, recommended: ``clang++``)
 
-``PYASC_SETUP_LINKER=<bin>`` (optional)
-    name or path of the linker executable (default: system linker, recommended: ``lld``)
+   ``PYASC_SETUP_CONFIG=<config>`` (optional)
+       build configuration for CMake (default: ``Release``)
 
-.. raw:: html
+   ``PYASC_SETUP_LINKER=<bin>`` (optional)
+       name or path of the linker executable (default: system linker, recommended: ``lld``)
 
-    </details><br />
+   ``PYASC_SETUP_NAME=<name>`` (optional)
+       override the Python distribution name (default: ``pyasc``)
+
+   ``PYASC_SETUP_VERSION=<version>`` (optional)
+       override the base package version
+
+   ``PYASC_SETUP_VERSION_SUFFIX=<suffix>`` (optional)
+       append a suffix to the local package version
 
 Also, ``-v`` option can be added to pip arguments to increase the output verbosity.
 This will allow to see e.g. CMake and C++ compiler commands.
-
-.. warning::
-
-    Remember to set ``PYASC_SETUP_EXPERIMENTAL=1`` if the **AscTile** module is required.
 
 
 Install the package (recommended)
@@ -135,6 +155,9 @@ This option provides the most setup features for the project developers.
 It allows to enable :doc:`development tools <../development/tools>`.
 
 These environment variables can be exported additionally to configure the installation process:
+
+``PYASC_SETUP_COVERAGE=1`` (optional)
+    enable code coverage instrumentation for the C++ build
 
 ``PYASC_SETUP_DEVTOOLS=1`` (optional)
     build and install development tools

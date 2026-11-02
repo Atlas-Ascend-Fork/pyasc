@@ -7,12 +7,15 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 
 import datetime
+from html import escape
 import importlib.util
 import os
+from pathlib import Path
 import re
 import tempfile
-from pathlib import Path
 
+from docutils import nodes
+from docutils.parsers.rst import Directive
 from sphinx_gallery.sorting import FileNameSortKey
 
 package_root = Path("../../..").resolve()
@@ -99,6 +102,20 @@ def setup_generated_mlir_docs():
         os.unlink(temp_md)
 
 
+class SpoilerDirective(Directive):
+    has_content = True
+    required_arguments = 1
+    final_argument_whitespace = True
+
+    def run(self):
+        title = escape(" ".join(self.arguments), quote=False)
+        opening_tag = nodes.raw("", f"<details>\n<summary><strong>{title}</strong></summary>", format="html")
+        content = nodes.container()
+        self.state.nested_parse(self.content, self.content_offset, content)
+        closing_tag = nodes.raw("", "</details><br />", format="html")
+        return [opening_tag, *content.children, closing_tag]
+
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -142,11 +159,12 @@ suppress_warnings = [
 sphinx_gallery_conf = {
     "download_all_examples": False,
     "examples_dirs": [str(package_root / "experimental" / "asctile" / "python" / "tutorials")],
-    "gallery_dirs": ["programming-guide/tutorials"],
+    "gallery_dirs": ["getting-started/tutorials"],
     "line_numbers": True,
     "within_subsection_order": FileNameSortKey,
 }
 
 
 def setup(app):
+    app.add_directive("spoiler", SpoilerDirective)
     setup_generated_mlir_docs()

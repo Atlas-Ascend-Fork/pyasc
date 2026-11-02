@@ -29,6 +29,26 @@ SmallVector<Value> getTensorShape(OpBuilder& builder, asctile::TensorOp tensorOp
 
 Value materializeSplatValue(OpBuilder& builder, Value cstTile);
 
+template <typename OpT, typename... SkipOpTypes>
+std::optional<OpT> searchDefiningOp(Value value)
+{
+    Value currentOp = value;
+    do {
+        auto parentOp = currentOp.getDefiningOp();
+        if (!parentOp)
+            break;
+        if (auto result = dyn_cast<OpT>(parentOp)) {
+            return result;
+        } else if (isa<SkipOpTypes...>(parentOp)) {
+            assert(parentOp->getNumOperands() == 1);
+            currentOp = parentOp->getOperand(0);
+        } else {
+            break;
+        }
+    } while (true);
+    return std::nullopt;
+}
+
 } // namespace asctile
 } // namespace mlir
 

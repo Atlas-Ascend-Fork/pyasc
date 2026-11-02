@@ -23,7 +23,7 @@
 // CHECK-NEXT:  ascvf.store %arg5[%11], %5, %12 : <1x1024xf32>, index, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
 // CHECK-NEXT:}
 func.func @dont_create_load_for_loaded_reg_tensor(%arg0: !ascendc.global_tensor<?x?xf32>, %arg1: !ascendc.data_copy_ext_params, %arg2: !ascendc.local_tensor<1x1024xf32>, %arg3: !ascendc.local_tensor<1x1024xf32>, %arg4: !ascendc.local_tensor<1x1024xf32>, %arg5: !ascendc.local_tensor<1x1024xf32>) {
-  ascvf.vf_group dst(%arg4, %arg5 : !ascendc.local_tensor<1x1024xf32>, !ascendc.local_tensor<1x1024xf32>) src(%arg3, %arg2 : !ascendc.local_tensor<1x1024xf32>, !ascendc.local_tensor<1x1024xf32>) {
+  ascvf.vf_group outs(%arg4, %arg5 : !ascendc.local_tensor<1x1024xf32>, !ascendc.local_tensor<1x1024xf32>) ins(%arg3, %arg2 : !ascendc.local_tensor<1x1024xf32>, !ascendc.local_tensor<1x1024xf32>) {
     emitasc.vec_scope {
       %c4 = arith.constant 4 : index
       %0 = ascendc.reg_tensor : <f32>
@@ -75,7 +75,7 @@ func.func @dont_create_load_for_loaded_reg_tensor(%arg0: !ascendc.global_tensor<
 // CHECK-NEXT:  ascvf.store %arg5[%11], %5, %12 : <1x1024xf32>, index, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
 // CHECK-NEXT:}
 func.func @dont_rewrite_memory(%arg0: !ascendc.global_tensor<?x?xf32>, %arg1: !ascendc.data_copy_ext_params, %arg2: !ascendc.local_tensor<1x1024xf32>, %arg3: !ascendc.local_tensor<1x1024xf32>, %arg4: !ascendc.local_tensor<1x1024xf32>, %arg5: !ascendc.local_tensor<1x1024xf32>) {
-  ascvf.vf_group dst(%arg5 : !ascendc.local_tensor<1x1024xf32>) src(%arg5 : !ascendc.local_tensor<1x1024xf32>) {
+  ascvf.vf_group outs(%arg5 : !ascendc.local_tensor<1x1024xf32>) ins(%arg5 : !ascendc.local_tensor<1x1024xf32>) {
     emitasc.vec_scope {
       %c4 = arith.constant 4 : index
       %0 = ascendc.reg_tensor : <f32>

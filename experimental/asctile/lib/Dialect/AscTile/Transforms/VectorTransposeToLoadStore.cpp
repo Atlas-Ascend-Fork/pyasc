@@ -75,6 +75,7 @@ struct VectorTransposeToStore : OpRewritePattern<asctile::TransposeOp> {
         auto storeOp = dyn_cast<asctile::StoreOp>(*op.getResult().getUsers().begin());
         if (!storeOp)
             return failure();
+        rewriter.setInsertionPointAfter(storeOp);
         auto newStoreOp = rewriter.replaceOpWithNewOp<asctile::StoreOp>(
             storeOp, op.getOperand(), storeOp.getBase(), storeOp.getOffsets(), storeOp.getRealShape());
 

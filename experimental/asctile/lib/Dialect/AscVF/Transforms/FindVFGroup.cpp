@@ -38,7 +38,7 @@ struct OpGroup {
     OpGroup(ArrayRef<Operation*> ops, Type groupType) : ops(ops), groupType(groupType) {}
 };
 
-bool isARPattern(ascendc::BroadcastOp bcastOp)
+bool isBroadcastSupported(ascendc::BroadcastOp bcastOp)
 {
     // broadcast by last axis
     // TODO: add case multiple last dim
@@ -49,12 +49,23 @@ bool isARPattern(ascendc::BroadcastOp bcastOp)
     if (!srcType || !dstType)
         return false;
     auto shape1 = SmallVector<int64_t>{srcType.getShape()};
-    if (shape1.back() != 1)
-        return false;
     auto shape2 = SmallVector<int64_t>{dstType.getShape()};
-    shape1.pop_back();
-    shape2.pop_back();
-    return shape1 == shape2;
+    if (shape1.empty() || shape1.size() != shape2.size())
+        return false;
+    if (shape1.back() == 1) {
+        // Column broadcast: leading dims match, the size-1 last dim is expanded.
+        // Ex: [96, 1] -> [96, 16]
+        return ArrayRef<int64_t>{shape1}.drop_back() == ArrayRef<int64_t>{shape2}.drop_back();
+    }
+    // Row broadcast: the source is a single row of the destination's row length,
+    // replicated over all rows. Ex: [1, 16] -> [96, 16]
+    if (shape1.back() != shape2.back())
+        return false;
+    for (size_t i = 0; i + 1 < shape1.size(); ++i) {
+        if (shape1[i] != 1)
+            return false;
+    }
+    return true;
 }
 
 ascendc::LocalTensorType getType(Operation* op)
@@ -91,7 +102,7 @@ bool isFusible(Operation* op)
     return llvm::TypeSwitch<Operation*, bool>(op)
         .Case<ascendc::ReduceSumOp, ascendc::ReduceMaxOp, ascendc::ReduceMinOp>(
             [](auto reduceOp) { return reduceOp.getPattern() == ascendc::ReducePattern::AR; })
-        .Case<ascendc::BroadcastOp>([](auto bcastOp) { return isARPattern(bcastOp); })
+        .Case<ascendc::BroadcastOp>([](auto bcastOp) { return isBroadcastSupported(bcastOp); })
         .Case<
             ascendc::DuplicateL2Op,
             // Vector binary operations (L2)
@@ -104,7 +115,7 @@ bool isFusible(Operation* op)
             // Vector scalar operations (L2)
             ascendc::AddsL2Op, ascendc::MulsL2Op, ascendc::SubsL2Op, ascendc::DivsL2Op, ascendc::MaxsL2Op,
             ascendc::MinsL2Op, ascendc::LeakyReluL2Op, ascendc::ShiftLeftL2Op, ascendc::ShiftRightL2Op,
-            ascendc::CompareScalarL2Op, ascendc::SelectL2Op>([](auto op) {
+            ascendc::SelectL2Op, ascendc::CompareScalarL2Op>([](auto op) {
             if (auto opt = getConstantIntValue(op.getCalCount())) {
                 auto type = getType(op);
                 return opt.value() == type.getNumElements();
@@ -121,11 +132,15 @@ bool isFusible(Operation* op)
         .Default([](Operation*) { return false; });
 }
 
+bool isHoistable(Operation* op) { return isa<ascendc::LocalTensorAutoOp>(op); }
+
 bool isSameGroup(Operation* firstOp, Operation* secondOp) { return getType(firstOp) == getType(secondOp); }
 
 void findGroupsImpl(Region& region, std::vector<OpGroup>& groups)
 {
     auto append = [&groups](SmallVectorImpl<Operation*>& ops) {
+        while (!ops.empty() && !isFusible(ops.back()))
+            ops.pop_back();
         if (!ops.empty()) {
             groups.emplace_back(ops, getType(ops.front()));
             ops.clear();
@@ -142,6 +157,8 @@ void findGroupsImpl(Region& region, std::vector<OpGroup>& groups)
                 append(ops);
             }
             ops.emplace_back(&op);
+        } else if (!ops.empty() && isHoistable(&op)) {
+            ops.emplace_back(&op);
         } else {
             append(ops);
         }
@@ -152,8 +169,8 @@ void findGroupsImpl(Region& region, std::vector<OpGroup>& groups)
 // Find binary_l2, unary_l2 operations that may be executed together
 std::vector<OpGroup> findOperationGroups(Region& region)
 {
-    // 1. The same calCount
-    // 2. Between ops absent other operations
+    // 1. The same calCount and type
+    // 2. Between fusible are allowed hoistable operations, which are located before the rest
     // 3. Contains more than 1 operation
     std::vector<OpGroup> groups;
     findGroupsImpl(region, groups);
@@ -247,7 +264,8 @@ ascvf::VFGroupOp wrapInVFGroupOp(OpGroup& group)
     ValueVector inputs = getInputLocalTensors(ops);
     ValueVector outputs = getOutputLocalTensors(ops);
 
-    auto fusedOp = builder.create<ascvf::VFGroupOp>(builder.getUnknownLoc(), outputs, inputs, fuseGroupType(group));
+    auto fusedOp =
+        builder.create<ascvf::VFGroupOp>(builder.getUnknownLoc(), outputs, inputs, ValueRange{}, fuseGroupType(group));
     auto& block = fusedOp.getRegion().emplaceBlock();
 
     builder.setInsertionPointToEnd(&block);
@@ -264,6 +282,16 @@ struct FindVFGroupPass : public ascvf::impl::FindVFGroupBase<FindVFGroupPass> {
     {
         func::FuncOp funcOp = getOperation();
         for (auto& group : findOperationGroups(funcOp.getRegion())) {
+            auto& ops = group.ops;
+            SmallVector<Operation*> fusible;
+            for (auto* op : ops) {
+                if (isFusible(op)) {
+                    fusible.push_back(op);
+                } else {
+                    op->moveBefore(ops.front());
+                }
+                group.ops = fusible;
+            }
             auto vfGroupOp = wrapInVFGroupOp(group);
         }
     }

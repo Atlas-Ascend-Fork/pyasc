@@ -45,14 +45,34 @@ LocalTensorType withLoc(Type type, TL loc)
     return cast<LTType>(LTType::get(tensor.getShape(), tensor.getElementType(), loc));
 }
 
+std::optional<TL> getRequiredCopySourceLoc(CopyOp copyOp)
+{
+    auto dstLoc = copyOp.getType().getLoc();
+    if (dstLoc == TL::L0A || dstLoc == TL::L0B || dstLoc == TL::BT)
+        return TL::L1;
+    if (dstLoc != TL::L1)
+        return std::nullopt;
+    auto distrib = copyOp.getDistrib();
+    if (!distrib || (*distrib != DistribMode::JoinByM && *distrib != DistribMode::JoinByN))
+        return std::nullopt;
+    return TL::UB;
+}
+
 std::optional<TL> findRequiredLoc(Value value)
 {
     DenseSet<TL> locs;
     for (auto* user : value.getUsers()) {
-        auto castOp = dyn_cast<tensor::CastOp>(user);
-        if (!castOp)
-            return std::nullopt;
-        locs.insert(cast<LocalTensorType>(castOp.getResult().getType()).getLoc());
+        if (auto castOp = dyn_cast<tensor::CastOp>(user)) {
+            locs.insert(cast<LocalTensorType>(castOp.getResult().getType()).getLoc());
+            continue;
+        }
+        if (auto copyOp = dyn_cast<CopyOp>(user); copyOp && copyOp.getBase() == value) {
+            if (auto loc = getRequiredCopySourceLoc(copyOp)) {
+                locs.insert(*loc);
+                continue;
+            }
+        }
+        return std::nullopt;
     }
     if (locs.size() != 1)
         return std::nullopt;

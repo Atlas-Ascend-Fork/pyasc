@@ -64,7 +64,9 @@ bool isCastSupported(Type srcType, Type dstType)
     if (isa<FloatType>(srcType) && isa<FloatType>(dstType)) {
         return (isa<BFloat16Type>(srcType) && isa<Float16Type, Float32Type>(dstType)) ||
                (isa<Float16Type>(srcType) && isa<BFloat16Type, Float32Type>(dstType)) ||
-               (isa<Float32Type>(srcType) && isa<BFloat16Type, Float16Type, Float32Type>(dstType));
+               (isa<Float32Type>(srcType) && isa<BFloat16Type, Float16Type, Float32Type>(dstType) ||
+                (isa<Float32Type>(srcType) && isa<Float8E4M3FNType, Float8E5M2Type>(dstType) ||
+                 (isa<Float8E4M3FNType, Float8E5M2Type>(srcType) && isa<Float32Type>(dstType))));
     }
 
     return false;

@@ -202,6 +202,8 @@ from .core.dtype import (
     half,
     float_,
     double,
+    float8_e4m3fn,
+    float8_e5m2,
 )
 from .core.enums import (
     AippInputFormat,

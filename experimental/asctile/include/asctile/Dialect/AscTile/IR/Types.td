@@ -62,7 +62,7 @@ class LocalTensorOfLengthAndType<list<int> allowedLengths, list<Type> allowedTyp
   "::mlir::asctile::LocalTensorType">;
 
 def AscTile_AnyTensor : AnyTypeOf<[GlobalTensor, LocalTensor]>;
-def AscTile_Float : AnyTypeOf<[F16, BF16, F32, F64]>;
+def AscTile_Float : AnyTypeOf<[F16, BF16, F32, F64, F8E5M2, F8E4M3FN]>;
 def AscTile_Int : AnyTypeOf<[I8, I16, I32, I64]>;
 def AscTile_Numeric : AnyTypeOf<[AscTile_Float, AscTile_Int]>;
 

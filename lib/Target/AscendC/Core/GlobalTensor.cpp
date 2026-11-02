@@ -32,3 +32,14 @@ LogicalResult mlir::ascendc::printOperation(CodeEmitter& emitter, ascendc::Globa
     os << " = " << emitter.getOrCreateName(op.getTensor()) << "(" << emitter.getOrCreateName(op.getIndex()) << ")";
     return success();
 }
+
+LogicalResult mlir::ascendc::printOperation(CodeEmitter& emitter, ascendc::GlobalTensorReinterpretCastOp op)
+{
+    FAIL_OR(emitter.emitVariableDeclaration(op->getResult(0), false));
+    auto& os = emitter.ostream();
+    os << " = " << emitter.getOrCreateName(op.getIn()) << ".template " << op.getAPIName() << "<";
+    Type elType = op.getOut().getType().getElementType();
+    FAIL_OR(emitter.emitType(op.getLoc(), elType));
+    os << ">()";
+    return success();
+}

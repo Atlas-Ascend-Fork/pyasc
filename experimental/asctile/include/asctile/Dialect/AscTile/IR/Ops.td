@@ -377,4 +377,11 @@ def CVStrategyOp : AscTile_Op<"cv_strategy", [SingleBlockImplicitTerminator<"Yie
   let hasVerifier = 1;
 }
 
+def ReindexOp : AscTile_Op<"reindex", [AllElementTypesMatch<["src", "result"]>]> {
+  let summary = "Gather elements from a local tensor by tensor of indices";
+  let arguments = (ins NumericLocalTensor:$src, IntLocalTensor:$index);
+  let results = (outs NumericLocalTensor:$result);
+  let assemblyFormat = "$src `,` $index attr-dict `:` type($src) `,` type($index) `,` type($result)";
+}
+
 #endif // ASCTILE_OPS_TD

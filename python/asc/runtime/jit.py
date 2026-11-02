@@ -32,7 +32,7 @@ from .cache import get_cache_manager, get_file_cache_key, get_mem_cache_key
 DT = TypeVar("DT")
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class CompilePrereqs:
     arg_types: Dict[str, BaseArgType]
     constexprs: Dict[str, ConstExpr]

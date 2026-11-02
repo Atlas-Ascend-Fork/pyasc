@@ -9,17 +9,21 @@ Two APIs are available:
 
 ## Motivation
 
+<!-- motivation-start -->
+
 PyAsc gives full access to Ascend C capabilities from Python -- at the cost of exposing all its complexity. Writing performant kernels requires deep hardware expertise: manual pipe synchronization (`set_flag`/`wait_flag`/`pipe_barrier`), explicit double-buffering, and fine-grained local memory management (`TPipe`/`TQue`/`alloc_tensor`/`free_tensor`).
 
 AscTile is a tile-based programming model inspired by Triton, CuTile, and TileLang, adapted for Ascend hardware. It eliminates these pain points while maintaining above 90% of PyAsc performance:
 
 - **Automatic synchronization** -- the compiler inserts all pipe barriers between CUBE, vector, and MTE units; no manual `set_flag`/`wait_flag` needed
 - **One-parameter double-buffering** -- enable with a single `asctile.range` option instead of orchestrating multi-queue pipelines
-- **Automatic memory management** -- virtual tiles with value semantics; allocation, reuse (graph-coloring), and lifecycle are fully handled by the compiler
+- **Automatic memory management** -- virtual tiles with value semantics; allocation and lifecycle are fully handled by the compiler
 - **Shape inference** -- no manual count/length/repeat parameters on every operation
 - **Numpy-like API** -- `reduce_sum`, `broadcast_to`, `reshape`, operator overloads -- familiar to Python/ML developers
-- **Multiple times smaller code** -- e.g. vadd kernel: 10 lines vs 40
-- **Performance portability** -- higher abstraction enables compiler-side optimizations (e.g. VF-block fusion) and portability across Ascend HW generations
+- **Multiple times smaller code** -- for example, a vector-addition kernel takes 10 lines instead of 40
+- **Performance portability** -- higher abstraction enables compiler-side optimizations (e.g. VF-block fusion) and portability across future HW generations
+
+<!-- motivation-end -->
 
 ## Quick Example
 
@@ -56,7 +60,7 @@ torch.testing.assert_close(out, x + y)
 
 ## Documentation
 
-Read the full [documentation](https://compiler-team-ru.github.io/pyasc/) to learn more:
+Read the full [documentation](https://compiler-team-ru.github.io/asctile/) to learn more:
 
 | Section | Description |
 |---------|-------------|

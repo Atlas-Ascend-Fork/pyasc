@@ -55,14 +55,19 @@ def BarrierOp : AscVF_Op<"barrier"> {
 def VFGroupOp : AscVF_Op<"vf_group", [SingleBlockImplicitTerminator<"::mlir::ascvf::YieldOp">, AttrSizedOperandSegments
 ]> {
   let summary = "block with fused operations";
-  let arguments = (ins Variadic<AscendC_LocalTensor>:$dstList,
-                   Variadic<AscendC_LocalTensor>:$srcList, TypeAttr:$groupType);
+  let arguments = (ins Variadic<AscendC_LocalTensor>:$outputTensors, Variadic<AscendC_LocalTensor>:$inputTensors,
+                   Variadic<AscendC_LocalTensor>:$tmpTensors, TypeAttr:$groupType);
   let regions = (region SizedRegion<1> : $region);
   let assemblyFormat = [{
-    (`dst` `(` $dstList^ `:` qualified(type($dstList)) `)` )? (`src` `(` $srcList^
-    `:` qualified(type($srcList)) `)`)? $region attr-dict
+    (`outs` `(` $outputTensors^ `:` qualified(type($outputTensors)) `)` )? (`ins` `(` $inputTensors^ `:` 
+    qualified(type($inputTensors)) `)`)? (`tmps` `(` $tmpTensors^ `:` qualified(type($tmpTensors)) `)` )? $region attr-dict
   }];
   let hasVerifier = 1;
+  let extraClassDeclaration = [{
+    bool canReuse(OpOperand&, OpOperand&);
+    SmallVector<Value> getDstTensors();
+    SmallVector<Value> getSrcTensors();
+  }];
 }
 
 def YieldOp : AscVF_Op<"yield", [Terminator]> {

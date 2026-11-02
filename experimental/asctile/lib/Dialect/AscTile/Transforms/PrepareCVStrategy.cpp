@@ -407,10 +407,24 @@ class CVStrategyModel {
                        << "has an incompatible shape for CV strategy loop-carried value " << edge.index;
         }
         for (auto* user : edge.iterArg.getUsers()) {
-            if (user->getParentOfType<CVStrategyOp>() != root)
+            auto parent = user->getParentOfType<CVStrategyOp>();
+            if (!parent)
                 return user->emitOpError("must use the loop-carried value only inside the corresponding CV strategy");
-            if (!annotations.contains(user))
-                return user->emitOpError("must participate in the corresponding CV strategy split");
+            if (parent != root) {
+                if (parent.getSplit() != split)
+                    return user->emitOpError(
+                        "must use the loop-carried value only inside a CV strategy with the same split");
+                continue;
+            }
+            if (annotations.contains(user))
+                continue;
+            auto existingSplit = user->getAttrOfType<DistribModeAttr>(attr::needSplit);
+            auto existingShape = user->getAttrOfType<DenseI64ArrayAttr>(attr::splitShape);
+            auto expectedShape = ArrayRef<int64_t>(edge.shape.data(), edge.shape.size());
+            if (existingSplit && existingSplit.getValue() == split && existingShape &&
+                existingShape.asArrayRef() == expectedShape)
+                continue;
+            return user->emitOpError("must participate in the corresponding CV strategy split");
         }
         return success();
     }

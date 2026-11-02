@@ -88,6 +88,8 @@ LogicalResult printOperation(CodeEmitter& emitter, ascendc::LocalMemBarOp op);
 
 LogicalResult printOperation(CodeEmitter& emitter, ascendc::CompareScalarRegOp op);
 
+LogicalResult printOperation(CodeEmitter& emitter, ascendc::CompareRegOp op);
+
 LogicalResult printOperation(CodeEmitter& emitter, ascendc::SelectRegOp op);
 
 LogicalResult printOperation(CodeEmitter& emitter, ascendc::CreateMaskOp op);

@@ -65,7 +65,9 @@ def broadcast_to(input: LocalTensor, *shape: int) -> LocalTensor:
             result:  [[0,1,2,...255], [0,1,2,...255] ... [0,1,2,..255]]
     """
     check_type("input", input, LocalTensor)
-    check_dtype("input", input, (KT.int8, KT.int16, KT.int32, KT.int64, KT.float16, KT.bfloat16, KT.float32))
+    check_dtype(
+        "input", input,
+        (KT.int8, KT.int16, KT.int32, KT.int64, KT.float16, KT.bfloat16, KT.float32, KT.float8_e4m3fn, KT.float8_e5m2))
     shape = normalize_shape_args(shape)
     shape = verify_shape(shape)
     if input.shape == shape:
@@ -181,8 +183,8 @@ def reshape(input: LocalTensor, *shape: int) -> LocalTensor:
             result = input.reshape([512])
     """
     check_type("input", input, LocalTensor)
-    check_dtype("input", input,
-                (KT.int8, KT.int16, KT.int32, KT.int64, KT.float16, KT.bfloat16, KT.float32, KT.float64))
+    check_dtype("input", input, (KT.int8, KT.int16, KT.int32, KT.int64, KT.float16, KT.bfloat16, KT.float32, KT.float64,
+                                 KT.float8_e4m3fn, KT.float8_e5m2))
     shape = normalize_shape_args(shape)
     shape = verify_shape(shape)
     if input.shape == shape:
@@ -354,7 +356,8 @@ def transpose(input: LocalTensor, *axis: int) -> LocalTensor:
             result = temp.transpose()
     """
     check_type("input", input, LocalTensor)
-    check_dtype("input", input, (KT.int8, KT.int16, KT.int32, KT.float16, KT.bfloat16, KT.float32))
+    check_dtype("input", input,
+                (KT.int8, KT.int16, KT.int32, KT.float16, KT.bfloat16, KT.float32, KT.float8_e4m3fn, KT.float8_e5m2))
     rank = len(input.shape)
     if len(axis) == 0:
         axis = list(range(0, rank))

@@ -104,12 +104,22 @@ struct ConvertSoftmax : ConvertOp<asctile::SoftmaxOp> {
 
     static int64_t getSoftMaxMinTmpSize(int64_t srcM, int64_t srcK, int64_t dataTypeSize)
     {
-        // Formula from
-        // https://gitcode.com/cann/asc-devkit/blob/b0fb6c8f89686dadc9b99fd114d9635eb5564dbf/impl/adv_api/detail/activation/softmax/regbase/3510/softmax_impl.h#L1188
+        // Two constraints from CANN 9.0.0:
+        // 1. regbase c310 SoftMax ND impl processes all srcM rows in one call and ignores
+        //    tiling.splitM; it needs sum/max arrays and the exp matrix in workLocal
+        //    (asc/impl/adv_api/detail/activation/softmax/regbase/c310/softmax_impl.h:1183-1196):
+        //    (alignUp(srcM, 32 / dataTypeSize) * 2 + srcM * srcK) floats.
+        // 2. Device-side retile for a zero-initialized tiling asserts
+        //    "softmax need min tmpbuffer is not enough" (softmax_common/softmax_tiling_func.h:55):
+        //    at least (32 / 4 + srcK + 256 / 4) floats for half, (32 / 4 + 256 / 4) for float.
         constexpr int64_t softmaxFloatSize = 4;
-        int64_t b32DataNumPerBlock = 32 / dataTypeSize;
-        int64_t offset = ((srcM + b32DataNumPerBlock - 1) / b32DataNumPerBlock) * b32DataNumPerBlock;
-        return (offset * 2 + srcM * srcK) * softmaxFloatSize;
+        constexpr int64_t oneBlkSize = 32;
+        constexpr int64_t oneRepeatFloats = 64;
+        const int64_t perBlk = oneBlkSize / dataTypeSize;
+        const int64_t offset = (srcM + perBlk - 1) / perBlk * perBlk;
+        const int64_t layoutFloats = offset * 2 + srcM * srcK;
+        const int64_t retileFloats = oneBlkSize / softmaxFloatSize + (dataTypeSize == 2 ? srcK : 0) + oneRepeatFloats;
+        return std::max(layoutFloats, retileFloats) * softmaxFloatSize;
     }
 
     LogicalResult matchAndRewrite(asctile::SoftmaxOp op, ConvertRewriter& rewriter) const override
@@ -562,7 +572,7 @@ struct ConvertInlineVF : ConvertOp<asctile::InlineVFOp> {
         if (rewriter.getRemappedValues(op.getInputs(), inputs).failed())
             return op.emitOpError("has unsupported inputs");
         ascir::ConstantOpBuilder consts(rewriter);
-        auto vfGroup = rewriter.create<ascvf::VFGroupOp>(loc, ValueRange{dst}, inputs, dst.getType());
+        auto vfGroup = rewriter.create<ascvf::VFGroupOp>(loc, ValueRange{dst}, inputs, ValueRange{}, dst.getType());
         {
             OpBuilder::InsertionGuard guard(rewriter);
             rewriter.setInsertionPointToStart(&vfGroup.getRegion().emplaceBlock());

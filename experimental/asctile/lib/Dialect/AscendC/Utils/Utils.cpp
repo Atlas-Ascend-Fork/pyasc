@@ -50,6 +50,9 @@ void appendImplicitUses(Value value, SmallVectorImpl<OpOperand*>& allUses)
                 appendImplicitUses(ifCoreOp->getResult(opndNum), allUses);
             }
         }
+        if (auto selectOp = dyn_cast<arith::SelectOp>(user)) {
+            appendImplicitUses(selectOp->getResult(0), allUses);
+        }
     }
 }
 

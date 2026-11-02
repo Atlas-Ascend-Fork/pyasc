@@ -19,6 +19,7 @@ namespace ascvf {
 #define GEN_PASS_DECL
 #include "asctile/Dialect/AscVF/Transforms/Passes.h.inc"
 
+std::unique_ptr<Pass> createCanonicalizeVFGroupPass();
 std::unique_ptr<Pass> createDispatchVFFusionPass();
 std::unique_ptr<Pass> createEliminateCommonMaskPass();
 std::unique_ptr<Pass> createEliminateDataTransferPass();

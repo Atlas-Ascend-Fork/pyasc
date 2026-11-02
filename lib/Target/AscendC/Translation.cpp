@@ -76,7 +76,7 @@ using PrintableOpTypes = std::tuple<
     ascendc::CreateMaskOp, ascendc::ReduceMaxRegOp, ascendc::ReduceMinRegOp, ascendc::ReduceSumRegOp,
     ascendc::DuplicateRegOp, ascendc::DataCopyStoreOp, ascendc::DataCopyLoadOp, ascendc::UpdateMaskOp,
     ascendc::MaskGenWithRegTensorOp, ascendc::RegTensorOp, ascendc::LocalMemBarOp, ascendc::CompareScalarRegOp,
-    ascendc::DuplicateScalarRegOp, ascendc::SelectRegOp,
+    ascendc::CompareRegOp, ascendc::DuplicateScalarRegOp, ascendc::SelectRegOp,
     // Binary register API operations
     ascendc::AddRegOp, ascendc::AndRegOp, ascendc::DivRegOp, ascendc::FusedAbsSubRegOp, ascendc::FusedExpSubRegOp,
     ascendc::FusedMulDstAddRegOp, ascendc::SubRegOp, ascendc::MaxRegOp, ascendc::MinRegOp, ascendc::MulRegOp,
@@ -240,7 +240,7 @@ using PrintableOpTypes = std::tuple<
 
     // Core
     // GlobalTensor operations
-    ascendc::GlobalTensorSubIndexOp, ascendc::GlobalTensorBracketOp,
+    ascendc::GlobalTensorSubIndexOp, ascendc::GlobalTensorBracketOp, ascendc::GlobalTensorReinterpretCastOp,
     // LocalTensor operations
     ascendc::LocalTensorV2Op, ascendc::LocalTensorV3Op, ascendc::LocalTensorBracketOp,
     ascendc::LocalTensorReinterpretCastOp, ascendc::LocalTensorSubIndexOp, ascendc::LocalTensorGetPhyAddrV2Op,

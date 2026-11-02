@@ -173,8 +173,10 @@ void fixInOutTensor(func::FuncOp& funcOp)
         for (auto& use : inTensor->getUses()) {
             auto* owner = use.getOwner();
             auto copyOp = dyn_cast<ascendc::DataCopyOp>(owner);
-            if (!copyOp || !copyOp.isLocalToGlobal())
-                return builder.setInsertionPoint(owner);
+            if (!copyOp || !copyOp.isLocalToGlobal()) {
+                builder.setInsertionPoint(owner);
+                return;
+            }
             ascir::ConstantOpBuilder consts(builder);
             Value calCount = consts.i64(getCopyCount(tensorType));
             auto outTensor = builder.create<TensorOp>(loc, tensorType, /*input*/ false, /*output*/ true, ValueRange{});

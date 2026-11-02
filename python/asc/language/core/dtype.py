@@ -8,8 +8,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
-import re
 from typing import Optional
 
 from ..._C import ir
@@ -17,7 +17,6 @@ from .utils import global_builder
 
 
 class DataType:
-    _re_matcher = re.compile("^(u?int|b?float)([0-9]+)$")
 
     class Kind(Enum):
         Any = ""
@@ -25,19 +24,39 @@ class DataType:
         Float = "float"
         UInt = "uint"
 
+    @dataclass
+    class BuiltinType:
+        factory: Optional[str]
+        value_factory: Optional[str]
+        bitwidth: int
+        kind: DataType.Kind
+
+    support_types = {
+        "void": BuiltinType("get_none_type", None, None, Kind.Any),
+        "int1": BuiltinType("get_i1_type", "get_i1", 8, Kind.Int),
+        "int8": BuiltinType("get_i8_type", "get_i8", 8, Kind.Int),
+        "int16": BuiltinType("get_i16_type", "get_i16", 16, Kind.Int),
+        "int32": BuiltinType("get_i32_type", "get_i32", 32, Kind.Int),
+        "int64": BuiltinType("get_i64_type", "get_i64", 64, Kind.Int),
+        "uint8": BuiltinType("get_ui8_type", "get_ui8", 8, Kind.UInt),
+        "uint16": BuiltinType("get_ui16_type", "get_ui16", 16, Kind.UInt),
+        "uint32": BuiltinType("get_ui32_type", "get_ui32", 32, Kind.UInt),
+        "uint64": BuiltinType("get_ui64_type", "get_ui64", 64, Kind.UInt),
+        "float16": BuiltinType("get_f16_type", "get_f16", 16, Kind.Float),
+        "bfloat16": BuiltinType("get_bf16_type", "get_bf16", 16, Kind.Float),
+        "float32": BuiltinType("get_f32_type", "get_f32", 32, Kind.Float),
+        "float64": BuiltinType("get_f64_type", "get_f64", 64, Kind.Float),
+        "float8_e4m3fn": BuiltinType("get_f8e4m3fn_type", "get_f8e4m3fn", 8, Kind.Float),
+        "float8_e5m2": BuiltinType("get_f8e5m2_type", "get_f8e5m2", 8, Kind.Float),
+    }
+
     def __init__(self, name: str):
         self.name = name
-        self.kind = self.Kind.Any
-        self.bitwidth: Optional[int] = None
-        match = self._re_matcher.match(name)
-        if match:
-            self.kind = {
-                "bfloat": self.Kind.Float,
-                "float": self.Kind.Float,
-                "int": self.Kind.Int,
-                "uint": self.Kind.UInt,
-            }.get(match[1], self.Kind.Any)
-            self.bitwidth = int(match[2])
+        try:
+            self.kind = self.support_types[name].kind
+            self.bitwidth = self.support_types[name].bitwidth
+        except KeyError:
+            raise ValueError(f"Unsupported type {name}") from None
 
     def __eq__(self, other: DataType) -> bool:
         if not isinstance(other, DataType):
@@ -87,27 +106,12 @@ class DataType:
         return div
 
     def to_ir(self) -> ir.Type:
-        builder = global_builder.get_ir_builder()
-        factories = {
-            "void": builder.get_none_type,
-            "int1": builder.get_i1_type,
-            "int8": builder.get_i8_type,
-            "int16": builder.get_i16_type,
-            "int32": builder.get_i32_type,
-            "int64": builder.get_i64_type,
-            "uint8": builder.get_ui8_type,
-            "uint16": builder.get_ui16_type,
-            "uint32": builder.get_ui32_type,
-            "uint64": builder.get_ui64_type,
-            "float16": builder.get_f16_type,
-            "bfloat16": builder.get_bf16_type,
-            "float32": builder.get_f32_type,
-            "float64": builder.get_f64_type,
-        }
-        factory = factories.get(self.name)
-        if factory:
+        try:
+            builder = global_builder.get_ir_builder()
+            factory = getattr(builder, self.support_types[self.name].factory)
             return factory()
-        raise ValueError(f"Unsupported DataType name: {self.name}")
+        except IndexError:
+            raise ValueError(f"Unsupported DataType name: {self.name}") from None
 
 
 # Predefined data types
@@ -131,6 +135,8 @@ int_ = int32
 half = float16
 float_ = float32
 double = float64
+float8_e4m3fn = DataType("float8_e4m3fn")
+float8_e5m2 = DataType("float8_e5m2")
 
 
 class KnownTypes:
@@ -154,3 +160,5 @@ class KnownTypes:
     half = half
     float_ = float_
     double = double
+    float8_e4m3fn = float8_e4m3fn
+    float8_e5m2 = float8_e5m2

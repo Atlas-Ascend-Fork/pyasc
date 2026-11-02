@@ -94,3 +94,24 @@ func.func @create_nested_vec_scope(%dst0 : !ascendc.local_tensor<256xf32>, %dst1
   }
   return
 }
+
+// CHECK-LABEL: func.func @row_broadcast_forms_group
+// CHECK: ascvf.vf_group
+// CHECK-NOT: ascvf.vf_group
+func.func @row_broadcast_forms_group(%dst0: !ascendc.local_tensor<96x16xf32>, %src: !ascendc.local_tensor<1x16xf32>, %dst1: !ascendc.local_tensor<96x16xf32>) {
+  %c1 = arith.constant 1 : i32
+  %c96 = arith.constant 96 : i32
+  %c16 = arith.constant 16 : i32
+  ascendc.broadcast %dst0, %src, %c1, %c96, %c16, %c1, %c1, %c16 {operandSegmentSizes = array<i32: 1, 1, 3, 3>} : !ascendc.local_tensor<96x16xf32>, !ascendc.local_tensor<1x16xf32>, i32, i32, i32, i32, i32, i32
+  ascendc.broadcast %dst1, %src, %c1, %c96, %c16, %c1, %c1, %c16 {operandSegmentSizes = array<i32: 1, 1, 3, 3>} : !ascendc.local_tensor<96x16xf32>, !ascendc.local_tensor<1x16xf32>, i32, i32, i32, i32, i32, i32
+  return
+}
+
+// CHECK-LABEL: func.func @row_broadcast_not_grouped_if_multiple_src_rows
+// CHECK-NOT: ascvf.vf_group
+func.func @row_broadcast_not_grouped_if_multiple_src_rows(%dst: !ascendc.local_tensor<96x16xf32>, %src: !ascendc.local_tensor<16x1xf32>) {
+  %c1 = arith.constant 1 : i32
+  %c16 = arith.constant 16 : i32
+  ascendc.broadcast %dst, %src, %c1, %c16, %c1, %c1, %c16, %c1 {operandSegmentSizes = array<i32: 1, 1, 3, 3>} : !ascendc.local_tensor<96x16xf32>, !ascendc.local_tensor<16x1xf32>, i32, i32, i32, i32, i32, i32
+  return
+}

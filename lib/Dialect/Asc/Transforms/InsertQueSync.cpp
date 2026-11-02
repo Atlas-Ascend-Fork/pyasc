@@ -44,7 +44,11 @@ Value findQueue(Value tensor)
 void enqueueTensors(func::FuncOp funcOp)
 {
     funcOp.walk([](ascendc::OpWithDst op) {
-        auto tensor = op.getDst();
+        // TODO: support multiple dst tensors
+        auto tensors = op.getDstTensors();
+        if (tensors.empty())
+            return;
+        auto tensor = tensors.front();
         if (!tensor || !isa<ascendc::BaseTensorType>(tensor.getType()) ||
             isa_and_present<ascendc::GlobalTensorOp>(tensor.getDefiningOp()))
             return;

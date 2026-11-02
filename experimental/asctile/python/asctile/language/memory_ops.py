@@ -548,3 +548,72 @@ def scatter(src: LocalTensor, dim: int, index: LocalTensor, dst: GlobalTensor, o
     index = cast_loc(index, TensorLocation.UB)
     global_builder.get_ir_builder().create_asctile_ScatterOp(src.to_ir(), dim, index.to_ir(), dst.to_ir(), offsets,
                                                              check_bounds, num_indices)
+
+
+@require_jit
+def reindex(src: LocalTensor, index: LocalTensor) -> LocalTensor:
+    """
+    Gather elements from a local tensor by tensor of indices.
+
+    For each index value ``index[i, ..., j]``, the element ``src[index[i, ..., j]]`` is copied to
+    ``result[i, ..., j]``. ``index`` is flattened to a 1D vector for the lookup. The result has the same shape as ``index`` and the same
+    dtype as ``src``, located in ``UB``.
+
+    Unlike :func:`gather`, which gathers subtensors from a global tensor along a chosen dimension,
+    ``reindex`` gathers individual elements from a local tensor.
+
+    Args:
+        src: The source local tensor any rank.
+        index: The index tensor (any rank, integer dtype: ``int8``, ``int16``, ``int32``, ``int64``).
+
+    Returns:
+        LocalTensor: A tensor with gathered elements, located in ``UB``, with the same shape as ``index``.
+
+    Raises:
+        TypeError: If ``src`` or ``index`` is not a LocalTensor.
+        RuntimeError: If ``index`` has a non-integer dtype.
+
+    Examples:
+        Gather every other element from a 1D local tensor. If the inputs have the following contents: ::
+
+            src = [10, 20, 30, 40, 50, 60, 70, 80]  # shape [8]
+            index = [0, 2, 4, 6]  # shape [4]
+
+        Then ``result = asctile.reindex(src, index)`` results in: ::
+
+            result = [10, 30, 50, 70]  # shape [4]
+
+        Gather from a 2D local tensor. If the inputs have the following contents: ::
+
+            src = [[0, 1, 2, 3],
+                   [4, 5, 6, 7],
+                   [8, 9, 10, 11],
+                   [12, 13, 14, 15]]  # shape [4, 4]
+            index = [1, 4, 7, 10, 13]  # shape [5]
+
+        Then ``result = asctile.reindex(src, index)`` results in: ::
+
+            result = [1, 4, 7, 10, 13]  # shape [5]
+
+        Gather with a 2D index tensor; the result shape follows ``index``. If the inputs have the
+        following contents: ::
+
+            src = [10, 20, 30, 40, 50, 60, 70, 80]  # shape [8]
+            index = [[0, 1],
+                     [2, 3],
+                     [4, 5]]  # shape [3, 2]
+
+        Then ``result = asctile.reindex(src, index)`` results in: ::
+
+            result = [[10, 20],
+                      [30, 40],
+                      [50, 60]]  # shape [3, 2]
+    """
+    check_type("src", src, LocalTensor)
+    check_type("index", index, LocalTensor)
+    check_dtype("index", index, (KT.int8, KT.int16, KT.int32, KT.int64))
+    src = cast_loc(src, TensorLocation.UB)
+    index = cast_loc(index, TensorLocation.UB)
+    ir_type = asctile.ir.get_asctile_LocalTensorType(index.shape, src.dtype.to_ir(), TensorLocation.UB)
+    handle = global_builder.get_ir_builder().create_asctile_ReindexOp(ir_type, src.to_ir(), index.to_ir())
+    return cast_loc(LocalTensor(handle))

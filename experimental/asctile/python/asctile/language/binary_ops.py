@@ -275,8 +275,9 @@ def right_shift(input: LocalTensor, other: RuntimeInt) -> LocalTensor:
 def check_matmul_arguments(input: LocalTensor, other: LocalTensor, hf32: bool) -> None:
     for name, value, loc in ("input", input, TensorLocation.L0A), ("other", other, TensorLocation.L0B):
         check_type(name, value, LocalTensor, BinaryOperandTypeError)
-        check_dtype(name, value, (KT.float16, KT.bfloat16, KT.float32))
-    if input.dtype != other.dtype:
+        check_dtype(name, value, (KT.float16, KT.bfloat16, KT.float32, KT.float8_e5m2, KT.float8_e4m3fn))
+    if input.dtype != other.dtype and input.dtype not in [KT.float8_e5m2, KT.float8_e4m3fn
+                                                          ] and other.dtype not in [KT.float8_e5m2, KT.float8_e4m3fn]:
         raise RuntimeError(f"Input tensors must have the same types, got {input.dtype} and {other.dtype}")
     if len(input.shape) != 2 or len(other.shape) != 2:
         raise RuntimeError(f"Input tensors must have two dims, got {len(input.shape)} and {len(other.shape)}")

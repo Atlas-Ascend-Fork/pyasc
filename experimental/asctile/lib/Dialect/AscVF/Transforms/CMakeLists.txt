@@ -7,6 +7,7 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 
 add_mlir_dialect_library(AscVFTransforms
+  CanonicalizeVFGroup.cpp
   DispatchVFFusion.cpp
   EliminateCommonMask.cpp
   EliminateDataTransfer.cpp

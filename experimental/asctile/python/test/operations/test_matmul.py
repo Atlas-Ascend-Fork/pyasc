@@ -39,10 +39,12 @@ def matmul_relu_quant_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.Global
     (11, 19, 41, torch.float32, [11, 19], [19, 41], asctile.bfloat16, torch.bfloat16),
     (15, 67, 27, torch.bfloat16, [15, 67], [67, 27], asctile.float16, torch.float16),
     (19, 1, 19, torch.bfloat16, [19, 1], [1, 19], asctile.float16, torch.float16),
+    (24, 24, 24, torch.float8_e5m2, [32, 32], [32, 32], asctile.float16, torch.float16),
+    (24, 24, 24, torch.float8_e4m3fn, [32, 32], [32, 32], asctile.bfloat16, torch.bfloat16),
 ])
 def test_matmul_relu_quant(m, k, n, dtype, tile_a, tile_b, quant_type, quant_type_torch):
-    a = (torch.rand((m, k), dtype=dtype) - .5) * 10
-    b = (torch.rand((k, n), dtype=dtype) - .5) * 10
+    a = ((torch.rand(m, k) - .5) * 10).to(dtype)
+    b = ((torch.rand(k, n) - .5) * 10).to(dtype)
     c = torch.zeros((a.shape[0], b.shape[1]), dtype=quant_type_torch)
     matmul_relu_quant_kernel[1](a, b, c, a.shape, b.shape, c.shape, tile_a, tile_b, quant_type)
     c_ref = (a.to(torch.float32) @ b.to(torch.float32)).relu().to(quant_type_torch)
@@ -131,10 +133,12 @@ def matmul_transpose_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.GlobalA
     (32, 128, 64, torch.bfloat16, [128, 32], [64, 128]),
     (32, 32, 32, torch.float32, [32, 32], [32, 32]),
     (64, 32, 128, torch.float32, [32, 64], [128, 32]),
+    (32, 32, 32, torch.float8_e5m2, [32, 32], [32, 32]),
+    (32, 32, 32, torch.float8_e4m3fn, [32, 32], [32, 32]),
 ])
 def test_matmul_transpose(m, k, n, dtype, tile_a, tile_b):
-    a = (torch.rand((k, m), dtype=dtype) - .5) * 10
-    b = (torch.rand((n, k), dtype=dtype) - .5) * 10
+    a = ((torch.rand(k, m) - .5) * 10).to(dtype)
+    b = ((torch.rand(n, k) - .5) * 10).to(dtype)
     c = torch.zeros((a.shape[1], b.shape[0]), dtype=torch.float32)
     matmul_transpose_kernel[1](a, b, c, a.shape, b.shape, c.shape, tile_a, tile_b)
     c_ref = a.T.to(torch.float32) @ b.T.to(torch.float32)
@@ -164,10 +168,12 @@ def matmul_bias_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.GlobalAddres
     (64, 128, 64, torch.bfloat16, torch.bfloat16, 4),
     (32, 32, 32, torch.float32, torch.float32, 1),
     (64, 64, 64, torch.float16, torch.float16, 1),
+    (32, 32, 32, torch.float8_e5m2, torch.float32, 1),
+    (32, 32, 32, torch.float8_e4m3fn, torch.float32, 1),
 ])
 def test_matmul_with_bias(m, k, n, dtype, bias_dtype, n_tiles):
-    a = (torch.rand((m, k), dtype=dtype) - .5) * 10
-    b = (torch.rand((k, n), dtype=dtype) - .5) * 10
+    a = ((torch.rand(m, k) - .5) * 10).to(dtype)
+    b = ((torch.rand(k, n) - .5) * 10).to(dtype)
     bias = (torch.rand((n, ), dtype=bias_dtype) - .5) * 10
     c = torch.zeros((a.shape[0], b.shape[1]), dtype=torch.float32)
     matmul_bias_kernel[1](a, b, bias, c, a.shape, b.shape, bias.shape, c.shape, n_tiles)
@@ -201,10 +207,11 @@ def matmul_acc_bias_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.GlobalAd
     (64, 128, 64, torch.bfloat16, torch.bfloat16, 4),
     (32, 32, 32, torch.float32, torch.float32, 1),
     (64, 64, 64, torch.float16, torch.float16, 1),
+    (32, 32, 32, torch.float8_e5m2, torch.float32, 1),
 ])
 def test_matmul_acc_with_bias(m, k, n, dtype, bias_dtype, k_tiles):
-    a = (torch.rand((m, k), dtype=dtype) - .5) * 10
-    b = (torch.rand((k, n), dtype=dtype) - .5) * 10
+    a = ((torch.rand(m, k) - .5) * 10).to(dtype)
+    b = ((torch.rand(k, n) - .5) * 10).to(dtype)
     bias = (torch.rand((n, ), dtype=bias_dtype) - .5) * 10
     c = torch.zeros((a.shape[0], b.shape[1]), dtype=torch.float32)
     matmul_acc_bias_kernel[1](a, b, bias, c, a.shape, b.shape, bias.shape, c.shape, k_tiles)
@@ -230,15 +237,16 @@ def matmul_gm_l1_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.GlobalAddre
     asctile.copy_out(acc, c_gm, [0, 0])
 
 
-@pytest.mark.parametrize("m, k, n, tile_k", [
-    (256, 16, 64, 64),
-    (256, 16, 65, 64),
+@pytest.mark.parametrize("m, k, n, tile_k, dtype", [
+    (256, 16, 64, 64, torch.float32),
+    (256, 16, 65, 64, torch.float32),
+    (256, 32, 65, 64, torch.float8_e4m3fn),
 ])
-def test_matmul_gm_l1(m, k, n, tile_k):
+def test_matmul_gm_l1(m, k, n, tile_k, dtype):
     dtype = torch.float32
-    a = torch.rand((m, k), dtype=dtype)
-    b = torch.rand((k, n), dtype=dtype)
-    c = torch.zeros((m, n), dtype=dtype)
+    a = torch.rand((m, k)).to(dtype)
+    b = torch.rand((k, n)).to(dtype)
+    c = torch.zeros((m, n), dtype=torch.float32)
     matmul_gm_l1_kernel[1](a, b, c, a.shape, b.shape, c.shape, tile_k)
-    c_ref = a @ b
+    c_ref = a.to(torch.float32) @ b.to(torch.float32)
     torch.testing.assert_close(c, c_ref, atol=1e-3, rtol=1e-3)

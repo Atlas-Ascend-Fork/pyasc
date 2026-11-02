@@ -11,6 +11,7 @@ import math
 from asc.experimental import asctile
 import pytest
 import torch
+from .helpers import assert_close
 
 
 @pytest.fixture(autouse=True)
@@ -18,7 +19,8 @@ def require_c310_auto(require_c310):
     require_c310()
 
 
-@pytest.mark.parametrize("dtype", (torch.int8, torch.int16, torch.int32, torch.float16, torch.bfloat16, torch.float32))
+@pytest.mark.parametrize("dtype", (torch.int8, torch.int16, torch.int32, torch.float16, torch.bfloat16, torch.float32,
+                                   torch.float8_e5m2, torch.float8_e4m3fn))
 @pytest.mark.parametrize("permute, input_shape, real_shape, offsets, pad_value", [
     # 2d cases
     [[1, 0], [16, 32], [16, 32], [0, 0], 0],
@@ -83,10 +85,19 @@ def test_transpose_onload(permute, input_shape, real_shape, offsets, pad_value, 
         asctile.copy_out(tile.transpose(*permute), g_output, [0] * len(output_shape))
 
     kernel[1](input, result, input_shape, real_shape, output_shape, write_real_shape, offsets, pad_value, permute)
-    torch.testing.assert_close(result, golden)
+    assert_close(result, golden)
 
 
-@pytest.mark.parametrize("dtype", (torch.int8, torch.int16, torch.int32, torch.float16, torch.bfloat16, torch.float32))
+@pytest.mark.parametrize("dtype", (
+    torch.int8,
+    torch.int16,
+    torch.int32,
+    torch.float16,
+    torch.bfloat16,
+    torch.float32,
+    torch.float8_e5m2,
+    torch.float8_e4m3fn,
+))
 @pytest.mark.parametrize("permute, input_shape, output_shape, offsets", [
     # 3d cases
     [[1, 0, 2], [2, 4, 128], [4, 2, 128], [0, 0, 0]],
@@ -123,18 +134,14 @@ def test_transpose_onstore(permute, input_shape, output_shape, offsets, dtype):
 
     kernel[1](input, result, input_shape, read_shape, output_shape, offsets, permute)
 
-    raw = result.clone()
     for i in permute:
         result = result.narrow(i, offsets[i], input_shape[permute[i]])
 
-    torch.set_printoptions(sci_mode=False)
-    print(golden)
-    print(raw)
-    print(result)
-    torch.testing.assert_close(result, golden)
+    assert_close(result, golden)
 
 
-@pytest.mark.parametrize("dtype", (torch.int8, torch.int16, torch.int32, torch.float16, torch.bfloat16, torch.float32))
+@pytest.mark.parametrize("dtype", (torch.int8, torch.int16, torch.int32, torch.float16, torch.bfloat16, torch.float32,
+                                   torch.float8_e5m2, torch.float8_e4m3fn))
 @pytest.mark.parametrize("input_shape", [
     [128, 64],
     [64, 128],
@@ -162,4 +169,4 @@ def test_transpose_in_ub(input_shape, dtype):
         asctile.copy_out(tile, g_copy, offsets=[0] * len(input_shape))
 
     kernel[1](input, result, copy, input_shape)
-    torch.testing.assert_close(input.T, result)
+    assert_close(input.T, result)

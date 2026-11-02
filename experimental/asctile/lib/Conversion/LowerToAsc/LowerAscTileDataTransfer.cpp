@@ -123,14 +123,18 @@ SmallVector<int64_t> getStrides(ArrayRef<int64_t> shape)
 
 TensorInfo prepareTensorInfo(ConvertRewriter& rewriter, Location loc, Value base, ValueRange offsets = {})
 {
-    auto tensorOp = base.getDefiningOp<asctile::TensorOp>();
-    assert(tensorOp && "tensor must be created by asctile.tensor op");
-    SmallVector<Value> shape = asctile::getTensorShape(rewriter, tensorOp);
+    auto tensorOp = asctile::searchDefiningOp<
+        asctile::TensorOp, UnrealizedConversionCastOp, ascendc::GlobalTensorReinterpretCastOp, arith::BitcastOp>(base);
+    assert(tensorOp && "can't find root asctile.tensor op");
+    SmallVector<Value> shape = asctile::getTensorShape(rewriter, *tensorOp);
     Value tensor = rewriter.getRemappedValue(base);
     auto type = cast<ascendc::BaseTensorType>(tensor.getType());
     if (!offsets.empty()) {
         Value linearOffset = linearizeOffset(rewriter, loc, shape, offsets);
         tensor = rewriter.create<ascendc::GlobalTensorSubIndexOp>(loc, type, tensor, linearOffset);
+        assert(
+            type.getElementType().getIntOrFloatBitWidth() ==
+            tensorOp->getType().getElementType().getIntOrFloatBitWidth());
     }
     return {shape, tensor, type};
 }
@@ -1415,6 +1419,53 @@ struct ConvertScatter : ConvertOp<asctile::ScatterOp> {
     }
 };
 
+struct ConvertReindex : ConvertOp<asctile::ReindexOp> {
+    using ConvertOp::ConvertOp;
+    using ConvertOp::createTensorOp;
+
+    LogicalResult matchAndRewrite(asctile::ReindexOp op, ConvertRewriter& rewriter) const override
+    {
+        auto loc = op.getLoc();
+        Value src = rewriter.getRemappedValue(op.getSrc());
+        Value indexTensor = rewriter.getRemappedValue(op.getIndex());
+        auto indexType = op.getIndex().getType();
+        auto indexElementType = indexType.getElementType();
+        int64_t indexCount = indexType.getNumElements();
+        auto indexShape = indexType.getShape();
+        ascir::ConstantOpBuilder consts(rewriter);
+        auto const0 = consts.i32(0);
+        auto const1 = consts.i32(1);
+        auto i32Type = rewriter.getI32Type();
+        Value result = createTensorOp(rewriter, loc, op.getType()).getResult();
+        auto elemSize = ascendc::getElementTypeSize(op.getSrc().getType());
+        Value int32Index;
+        if (indexElementType.getIntOrFloatBitWidth() == 32) {
+            int32Index = indexTensor;
+        } else {
+            auto int32Tensor = createTensorOp(rewriter, loc, indexShape, i32Type);
+            rewriter.create<ascendc::CastL2Op>(
+                loc, int32Tensor, indexTensor, ascendc::RoundMode::CAST_NONE, consts.i64(indexCount));
+            int32Index = int32Tensor.getResult();
+        }
+        Value byteOffsetTensor;
+        if (elemSize == 1) {
+            byteOffsetTensor = int32Index;
+        } else {
+            auto byteOffsetOp = createTensorOp(rewriter, loc, indexShape, i32Type);
+            rewriter.create<ascendc::MulsL2Op>(
+                loc, byteOffsetOp, int32Index, consts.i32(static_cast<int32_t>(elemSize)), consts.i64(indexCount));
+            byteOffsetTensor = byteOffsetOp.getResult();
+        }
+        auto uint32Type = IntegerType::get(rewriter.getContext(), 32, IntegerType::Unsigned);
+        auto uint32LocalType = ascendc::LocalTensorType::get(indexShape, uint32Type);
+        Value uint32OffsetTensor =
+            rewriter.create<ascendc::LocalTensorReinterpretCastOp>(loc, uint32LocalType, byteOffsetTensor).getResult();
+        rewriter.create<ascendc::GatherL2Op>(loc, result, src, uint32OffsetTensor, const0, consts.i64(indexCount));
+        rewriter.replaceOp(op, result);
+        return success();
+    }
+};
+
 struct LowerAscTileDataTransferPass
     : public asclower::impl::LowerAscTileDataTransferBase<LowerAscTileDataTransferPass> {
     void runOnOperation() override
@@ -1425,7 +1476,7 @@ struct LowerAscTileDataTransferPass
         target.addIllegalOp<
             //
             asctile::LoadOp, asctile::StoreOp, asctile::CopyOp, asctile::StoreFixpipeOp, asctile::GetValueOp,
-            asctile::SetValueOp, asctile::CopyFixpipeOp, asctile::GatherOp, asctile::ScatterOp
+            asctile::SetValueOp, asctile::CopyFixpipeOp, asctile::GatherOp, asctile::ScatterOp, asctile::ReindexOp
             //
             >();
         target.addLegalDialect<
@@ -1437,7 +1488,7 @@ struct LowerAscTileDataTransferPass
             //
             ConvertLoadToUB, ConvertLoadToUBWithTranspose, ConvertLoadToL1, ConvertStore, ConvertStoreFixpipe,
             ConvertCopyL1ToL0, ConvertCopyUBToL1, ConvertCopyL1ToBT, ConvertGetValue, ConvertSetValue,
-            ConvertCopyFixpipe, ConvertStoreWithTranspose, ConvertGather, ConvertScatter
+            ConvertCopyFixpipe, ConvertStoreWithTranspose, ConvertGather, ConvertScatter, ConvertReindex
             //
             >(converter, context);
         auto op = getOperation();

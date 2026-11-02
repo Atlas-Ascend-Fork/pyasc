@@ -10,6 +10,7 @@ from typing import Iterable, Mapping
 
 local_package_dirs = {
     "asctile": "experimental/asctile/python/asctile",
+    "asctile.interpreter": "experimental/asctile/python/asctile/interpreter",
     "asctile.language": "experimental/asctile/python/asctile/language",
     "asctile.runtime": "experimental/asctile/python/asctile/runtime",
 }

@@ -24,6 +24,8 @@ LogicalResult printOperation(CodeEmitter& emitter, ascendc::GlobalTensorSubIndex
 
 LogicalResult printOperation(CodeEmitter& emitter, ascendc::GlobalTensorBracketOp op);
 
+LogicalResult printOperation(CodeEmitter& emitter, ascendc::GlobalTensorReinterpretCastOp op);
+
 } // namespace ascendc
 } // namespace mlir
 

@@ -169,7 +169,8 @@ void materialize(emitasc::VecScopeOp vecScopeOp, Type groupType)
                         builder.create<arith::AddIOp>(builder.getUnknownLoc(), offset, consts.index(step));
                     auto dstAddrWithTailOffset = builder.create<emitasc::PtrOffsetOp>(
                         builder.getUnknownLoc(), resultType, dstAddr, IntegerAttr{}, tailOffset);
-                    builder.create<ascendc::StoreUnAlignPostOp>(builder.getUnknownLoc(), dstAddrWithTailOffset, ureg);
+                    builder.create<ascendc::StoreUnAlignPostOp>(
+                        builder.getUnknownLoc(), dstAddrWithTailOffset, ureg, consts.index(0));
                 } else {
                     builder.create<ascendc::DataCopyStoreOp>(
                         builder.getUnknownLoc(), dstAddr, store.getSrcReg(), store.getMask(),

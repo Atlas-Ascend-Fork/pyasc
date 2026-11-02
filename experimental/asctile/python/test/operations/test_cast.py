@@ -56,12 +56,7 @@ def create_input(dtype: torch.dtype):
 
 def get_expected(x, src_dtype: torch.dtype, dst_dtype: torch.dtype, round_fn=None):
     if dst_dtype.is_floating_point:
-        if dst_dtype == torch.float16:
-            return x.to(torch.float16)
-        if dst_dtype == torch.float32:
-            return x.to(torch.float32)
-        if dst_dtype == torch.bfloat16:
-            return x.to(torch.bfloat16)
+        return x.to(dst_dtype)
     if src_dtype.is_floating_point:
         if round_fn:
             rounded = round_fn(x)
@@ -253,3 +248,25 @@ def test_cast_with_round_mode(require_c310, src_torch_dtype, dst_asctile_dtype, 
         torch.testing.assert_close(z, expected, atol=atol, rtol=atol)
     else:
         torch.testing.assert_close(z, expected)
+
+
+@pytest.mark.parametrize("kernel", [
+    cast_round_mode_kernel,
+    cast_to_method_kernel,
+])
+@pytest.mark.parametrize("src_torch_dtype, dst_asctile_dtype, dst_torch_dtype, round_mode", [
+    (torch.float32, asctile.float8_e5m2, torch.float8_e5m2, asctile.RoundMode.Rint),
+    (torch.float32, asctile.float8_e4m3fn, torch.float8_e4m3fn, asctile.RoundMode.Rint),
+    (torch.float8_e5m2, asctile.float32, torch.float32, asctile.RoundMode.NoRound),
+    (torch.float8_e4m3fn, asctile.float32, torch.float32, asctile.RoundMode.NoRound),
+])
+def test_fp8_cast(require_c310, src_torch_dtype, dst_asctile_dtype, dst_torch_dtype, round_mode, kernel):
+    require_c310()
+    x = torch.randn([SIZE]).to(src_torch_dtype)
+    z = torch.zeros(SIZE, dtype=dst_torch_dtype)
+    kernel[USE_CORE_NUM](x, z, SIZE, dst_asctile_dtype, round_mode)
+    round_fn = get_round_mode_fn(round_mode)
+    expected = get_expected(x, src_torch_dtype, dst_torch_dtype, round_fn)
+
+    atol = 1e-2
+    torch.testing.assert_close(z.to(torch.float32), expected.to(torch.float32), atol=atol, rtol=atol)

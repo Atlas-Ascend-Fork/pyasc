@@ -9,7 +9,7 @@
 Setup runtime environment
 =========================
 
-After the :doc:`installation <build-from-source>`, the following dependencies should be installed before running PyAsc operators:
+After the :doc:`installation <install-from-pypi>`, the following dependencies should be installed before running PyAsc operators:
 
 .. contents::
     :depth: 1
@@ -19,17 +19,17 @@ Ascend CANN
 -----------
 
 1. Download installation package from `the download center <https://www.hiascend.com/cann/download>`__
-   (recommended version is ``9.2.0-beta.2``) **depending on the host platform**:
+   (recommended version is ``9.2.0``) **depending on the host platform**:
 
    .. code:: bash
 
-      wget https://ascend-cann-open.obs.cn-north-4.myhuaweicloud.com/CANN/CANN%209.2.0-beta.2/Ascend-cann_9.2.0-beta.2_linux-x86_64.run
+      wget https://ascend-cann-open.obs.cn-north-4.myhuaweicloud.com/CANN/CANN%209.2.0/Ascend-cann_9.2.0_linux-x86_64.run
 
 2. Install downloaded package with the following command:
 
    .. code:: bash
 
-      bash Ascend-cann_9.2.0-beta.2_linux-x86_64.run --full
+      bash Ascend-cann_9.2.0_linux-x86_64.run --full
 
 3. Enable CANN environment:
 
@@ -39,7 +39,7 @@ Ascend CANN
        export LD_LIBRARY_PATH=$ASCEND_HOME_PATH/tools/simulator/Ascend950PR_9599/lib:$LD_LIBRARY_PATH
 
 To learn more about CANN environment, visit `the homepage <https://www.hiascend.com/cann>`__.
-Ascend C API reference is available in `the documentation <https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/920beta2/API/ascendcopapi/atlasascendc_api_07_0003.html>`__.
+Ascend C API reference is available in `the documentation <https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/920/API/ascendcopapi/atlasascendc_api_07_0003.html>`__.
 
 PyTorch
 -------
@@ -49,6 +49,9 @@ The package can be installed via pip:
 
 .. code-block:: bash
 
-   python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+   python3 -m pip install "torch>=2.7.1" --index-url https://download.pytorch.org/whl/cpu
 
 Visit `the official website <https://pytorch.org/get-started/locally/>`__ to learn more.
+
+Additionally, ``torch_npu`` may be installed to allocate host-side tensors directly on Ascend hardware (if available).
+The setup commands are available on `Ascend for PyTorch <https://www.hiascend.com/developer/software/ai-frameworks/pytorch/download>`__ webpage.

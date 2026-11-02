@@ -183,12 +183,8 @@ void replaceIdenticalLoads(ascvf::VFGroupOp groupOp)
 
 void eliminateOverwrittenStores(ascvf::VFGroupOp groupOp)
 {
-    ValueSet inputTensors;
-    for (auto tensor : groupOp.getSrcList()) {
-        inputTensors.insert(tensor);
-    }
     ValueSet outputTensors;
-    for (auto tensor : groupOp.getDstList()) {
+    for (auto tensor : groupOp.getOutputTensors()) {
         outputTensors.insert(tensor);
     }
     ValueMap<SmallVector<Operation*>> tensorToLoadStoreOps;

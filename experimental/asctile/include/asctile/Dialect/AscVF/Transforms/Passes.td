@@ -128,4 +128,16 @@ def ReorderOpsInVecScope : Pass<"ascvf-reorder-ops-in-vec-scope", "func::FuncOp"
   let constructor = "mlir::ascvf::createReorderOpsInVecScopePass()";
 }
 
+def CanonicalizeVFGroup : Pass<"canonicalize-vf-group", "func::FuncOp"> {
+  let summary = "Reclassifies VFGroupOp src/dst tensors into input, output, and tmp lists";
+  let description = [{
+    Recomputes the input, output, and temporary tensor lists of every VFGroupOp
+    by analyzing how each src/dst tensor is used relative to the group region.
+    A src tensor is kept as an input when it is used inside the group. A dst
+    tensor is kept as an output when it is both used inside the group and used
+    after the group; otherwise it is demoted to a temporary tensor. The pass
+    processes groups in reverse program order.
+  }];
+  let constructor = "mlir::ascvf::createCanonicalizeVFGroupPass()";
+}
 #endif // ASCVF_PASSES_TD

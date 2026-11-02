@@ -97,6 +97,18 @@ LogicalResult mlir::ascendc::printOperation(CodeEmitter& emitter, ascendc::Compa
     return success();
 }
 
+LogicalResult mlir::ascendc::printOperation(CodeEmitter& emitter, ascendc::CompareRegOp op)
+{
+    auto& os = emitter.ostream();
+    os << ascNamespace << "::" << op.getAPIName() << "<";
+    auto elementType = cast<ascendc::RegTensorType>(op.getSrc0Reg().getType()).getElementType();
+    FAIL_OR(emitter.emitType(op.getLoc(), elementType));
+    os << ", " << ascNamespace << "::CMPMODE::" << ascendc::stringifyEnum(op.getCmpMode()) << ">("
+       << emitter.getOrCreateName(op.getDstReg()) << ", " << emitter.getOrCreateName(op.getSrc0Reg()) << ", "
+       << emitter.getOrCreateName(op.getSrc1Reg()) << ", " << emitter.getOrCreateName(op.getMaskReg()) << ")";
+    return success();
+}
+
 LogicalResult mlir::ascendc::printOperation(CodeEmitter& emitter, ascendc::SelectRegOp op)
 {
     auto& os = emitter.ostream();

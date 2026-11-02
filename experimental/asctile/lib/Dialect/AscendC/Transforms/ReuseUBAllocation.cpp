@@ -179,7 +179,7 @@ struct ReuseUBAllocationPass : public ascendc::impl::ReuseUBAllocationBase<Reuse
         return lastUser->isBeforeInBlock(firstUser);
     }
 
-    void reuse(SmallVectorImpl<TensorOp>& tensorOpList, Block* block, DominanceInfo& di)
+    void reuse(SmallVectorImpl<TensorOp>& tensorOpList, Block* block, DominanceInfo& di) const
     {
         while (tensorOpList.size() > 1) {
             TensorOp topTensorOp = tensorOpList.pop_back_val();

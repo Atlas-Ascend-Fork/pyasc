@@ -431,6 +431,44 @@ func.func @scf_for_inside_scf_if(%arg0: !ascendc.local_tensor<16x16xf16>, %arg1:
   return %0 : !ascendc.local_tensor<16x16xf32>
 }
 
+// CHECK-LABEL: func.func @trigger_dst_used_only_as_loop_iter_arg_init(%arg0: !ascendc.fixpipe_params_v220, %arg1: !ascendc.fixpipe_config) -> !ascendc.local_tensor<8xf32> attributes {ascendc.cross_core_flag_id = 0 : i32} {
+// CHECK:       %0 = ascendc.local_tensor_v3 co1, 0, 64 : !ascendc.local_tensor<8xf32>
+// CHECK-NEXT:  %1 = ascendc.local_tensor_v3 veccalc, 0, 64 : !ascendc.local_tensor<8xf32>
+// CHECK-NEXT:  %2 = ascendc.local_tensor_v3 veccalc, 0, 64 : !ascendc.local_tensor<8xf32>
+// CHECK:       %3 = ascendc.if_aic -> !ascendc.local_tensor<8xf32> {
+// CHECK-NEXT:    ascendc.fixpipe %1, %0, %arg0, %arg1 {direction = #ascendc.copy_direction<co1, veccalc>} : !ascendc.local_tensor<8xf32>, !ascendc.local_tensor<8xf32>, !ascendc.fixpipe_params_v220, !ascendc.fixpipe_config
+// CHECK-NEXT:    ascendc.yield %1 : !ascendc.local_tensor<8xf32>
+// CHECK-NEXT:  }
+// CHECK-NEXT:  %4 = scf.for %arg2 = %c0_i32 to %c2_i32 step %c1_i32 iter_args(%arg3 = %1) -> (!ascendc.local_tensor<8xf32>)  : i32 {
+// CHECK-NEXT:    %5 = ascendc.if_aiv -> !ascendc.local_tensor<8xf32> {
+// CHECK-NEXT:      ascendc.add_l3 %2, %arg3, %arg3 : !ascendc.local_tensor<8xf32>, !ascendc.local_tensor<8xf32>, !ascendc.local_tensor<8xf32>
+// CHECK-NEXT:      ascendc.yield %2 : !ascendc.local_tensor<8xf32>
+// CHECK-NEXT:    }
+// CHECK-NEXT:    scf.yield %5 : !ascendc.local_tensor<8xf32>
+// CHECK-NEXT:  }
+// CHECK-NEXT:  return %4 : !ascendc.local_tensor<8xf32>
+// CHECK-NEXT:}
+func.func @trigger_dst_used_only_as_loop_iter_arg_init(%arg0: !ascendc.fixpipe_params_v220, %arg1: !ascendc.fixpipe_config) -> !ascendc.local_tensor<8xf32> {
+  %co1 = ascendc.local_tensor_v3 co1, 0, 64 : !ascendc.local_tensor<8xf32>
+  %ub = ascendc.local_tensor_v3 veccalc, 0, 64 : !ascendc.local_tensor<8xf32>
+  %result = ascendc.local_tensor_v3 veccalc, 0, 64 : !ascendc.local_tensor<8xf32>
+  %c0 = arith.constant 0 : i32
+  %c1 = arith.constant 1 : i32
+  %c2 = arith.constant 2 : i32
+  %0 = ascendc.if_aic -> !ascendc.local_tensor<8xf32> {
+    ascendc.fixpipe %ub, %co1, %arg0, %arg1 {direction = #ascendc.copy_direction<co1, veccalc>} : !ascendc.local_tensor<8xf32>, !ascendc.local_tensor<8xf32>, !ascendc.fixpipe_params_v220, !ascendc.fixpipe_config
+    ascendc.yield %ub : !ascendc.local_tensor<8xf32>
+  }
+  %1 = scf.for %i = %c0 to %c2 step %c1 iter_args(%acc = %ub) -> !ascendc.local_tensor<8xf32> : i32 {
+    %2 = ascendc.if_aiv -> !ascendc.local_tensor<8xf32> {
+      ascendc.add_l3 %result, %acc, %acc : !ascendc.local_tensor<8xf32>, !ascendc.local_tensor<8xf32>, !ascendc.local_tensor<8xf32>
+      ascendc.yield %result : !ascendc.local_tensor<8xf32>
+    }
+    scf.yield %2 : !ascendc.local_tensor<8xf32>
+  }
+  return %1 : !ascendc.local_tensor<8xf32>
+}
+
 // -----
 
 // CHECK-LABEL: func.func @cv_ratio_2_dual_sync(%arg0: !ascendc.fixpipe_params_v220, %arg1: !ascendc.fixpipe_config) -> !ascendc.local_tensor<8xf32> attributes {ascendc.cross_core_flag_id = 1 : i32} {

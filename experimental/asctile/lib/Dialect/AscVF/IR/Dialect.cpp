@@ -10,6 +10,7 @@
 
 #include "asctile/Dialect/AscVF/IR/AscVF.h"
 
+#include "ascir/Dialect/Asc/IR/Asc.h"
 #include "ascir/Dialect/Utils/Inlining.h"
 
 #include "mlir/IR/DialectImplementation.h"
@@ -35,8 +36,28 @@ void AscVFDialect::initialize()
 // External models
 //===----------------------------------------------------------------------===//
 
+struct VFGroupSrcModel : public ascendc::OpWithSrc::ExternalModel<VFGroupSrcModel, ascvf::VFGroupOp> {
+    SmallVector<Value> getSrcTensors(Operation* op) const { return cast<ascvf::VFGroupOp>(op).getSrcTensors(); }
+};
+
+struct VFGroupDstModel : public ascendc::OpWithDst::ExternalModel<VFGroupDstModel, ascvf::VFGroupOp> {
+    SmallVector<Value> getDstTensors(Operation* op) const { return cast<ascvf::VFGroupOp>(op).getDstTensors(); }
+};
+
+struct VFGroupReusableSrcModel
+    : public ascendc::OpWithReusableSrc::ExternalModel<VFGroupReusableSrcModel, ascvf::VFGroupOp> {
+    bool canReuse(Operation* op, OpOperand& src, OpOperand& dst) const
+    {
+        return cast<ascvf::VFGroupOp>(op).canReuse(src, dst);
+    }
+};
+
 void ascvf::registerExternalModels(DialectRegistry& registry)
 {
-    registry.addExtension(
-        +[](MLIRContext*, AscVFDialect* dialect) { dialect->addInterface<ascir::PermissiveInlinerInterface>(); });
+    registry.addExtension(+[](MLIRContext* ctx, AscVFDialect* dialect) {
+        dialect->addInterface<ascir::PermissiveInlinerInterface>();
+        ascvf::VFGroupOp::attachInterface<VFGroupSrcModel>(*ctx);
+        ascvf::VFGroupOp::attachInterface<VFGroupDstModel>(*ctx);
+        ascvf::VFGroupOp::attachInterface<VFGroupReusableSrcModel>(*ctx);
+    });
 }

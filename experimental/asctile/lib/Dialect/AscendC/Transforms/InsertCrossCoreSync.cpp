@@ -62,7 +62,7 @@ SmallVector<Operation*> collectUsers(Operation* dstDefiningOp, bool triggerIsAIV
             return;
         if (!llvm::any_of(op->getOperands(), [&](Value v) { return v.getDefiningOp() == dstDefiningOp; }))
             return;
-        if (Operation* group = findGroupAncestor(op); isa_and_present<ascendc::IfAICOp>(group) == triggerIsAIV)
+        if (Operation* group = findGroupAncestor(op); group && isa<ascendc::IfAICOp>(group) == triggerIsAIV)
             users.push_back(op);
     });
     return users;

@@ -159,3 +159,32 @@ def test_load_padding(require_c310, input_shape, tile_shape, offsets):
     if valid_rows > 0 and valid_cols > 0:
         torch.testing.assert_close(out[0:valid_rows, 0:valid_cols], x[row_start:row_start + valid_rows,
                                                                       col_start:col_start + valid_cols])
+
+
+@asctile.jit(always_compile=True)
+def reindex_kernel(src_ptr: asctile.GlobalAddress, idx_ptr: asctile.GlobalAddress, out_ptr: asctile.GlobalAddress,
+                   src_shape: asctile.ConstExpr, idx_shape: asctile.ConstExpr) -> None:
+    src_gm = asctile.global_tensor(src_ptr, src_shape)
+    idx_gm = asctile.global_tensor(idx_ptr, idx_shape)
+    out_gm = asctile.global_tensor(out_ptr, idx_shape)
+    src = asctile.copy_in(src_gm, [0] * len(src_shape), src_shape)
+    idx = asctile.copy_in(idx_gm, [0] * len(idx_shape), idx_shape)
+    result = asctile.reindex(src, idx)
+    asctile.copy_out(result, out_gm, [0] * len(idx_shape))
+
+
+@pytest.mark.parametrize("src_shape", ([128], [16, 8], [4, 32]))
+@pytest.mark.parametrize("idx_shape", ([16], [2, 32]))
+@pytest.mark.parametrize("index_dtype", (torch.int8, torch.int16, torch.int32, torch.int64))
+def test_reindex(require_c310, src_shape, idx_shape, index_dtype):
+    require_c310()
+    src_count = 1
+    for s in src_shape:
+        src_count *= s
+    src = torch.randn(src_count, dtype=torch.float32).reshape(src_shape)
+    upper = min(src_count, torch.iinfo(index_dtype).max + 1)
+    idx = torch.randint(0, upper, idx_shape, dtype=torch.int32).to(index_dtype)
+    out = torch.zeros(idx_shape, dtype=torch.float32)
+    reindex_kernel[1](src, idx, out, src_shape, idx_shape)
+    golden = src.reshape(-1)[idx.to(torch.int64)]
+    torch.testing.assert_close(out, golden)

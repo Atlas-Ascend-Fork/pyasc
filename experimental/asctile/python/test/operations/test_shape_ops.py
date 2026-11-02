@@ -11,6 +11,7 @@ import itertools
 from asc.experimental import asctile
 import pytest
 import torch
+from .helpers import assert_close
 
 
 @pytest.mark.parametrize("asc_op, torch_op, args, shape", (
@@ -22,18 +23,19 @@ import torch
     (asctile.expand_dims, torch.unsqueeze, [0], [32]),
     (asctile.squeeze, torch.squeeze, [0], [1, 32]),
 ))
-@pytest.mark.parametrize(
-    "dtype",
-    (torch.int8, torch.int16, torch.int32, torch.int64, torch.float16, torch.bfloat16, torch.float32, torch.float64))
+@pytest.mark.parametrize("dtype", (torch.int8, torch.int16, torch.int32, torch.int64, torch.float16, torch.bfloat16,
+                                   torch.float32, torch.float64, torch.float8_e5m2, torch.float8_e4m3fn))
 def test_shape_op(require_c310, asc_op, torch_op, args, shape, dtype: torch.dtype):
     if asc_op is asctile.broadcast_to:
         require_c310()
         if dtype == torch.float64:
             pytest.skip("broadcast_to float64 support is limited")
+    if dtype in [torch.float8_e5m2, torch.float8_e4m3fn]:
+        require_c310()
 
     def create_input(tensor_shape):
         if dtype.is_floating_point:
-            return torch.randn(tensor_shape, dtype=dtype).clamp(1, 100)
+            return torch.randn(tensor_shape).clamp(1, 100).to(dtype)
         elif dtype.is_signed:
             return torch.randint(1, 100, tensor_shape, dtype=dtype)
 
@@ -57,7 +59,7 @@ def test_shape_op(require_c310, asc_op, torch_op, args, shape, dtype: torch.dtyp
         asctile.copy_out(zt, asctile.global_tensor(z_ptr, output_shape), out_offsets)
 
     kernel[1](x, z, x.shape, ref_z.shape, in_offsets, out_offsets, asc_op, args)
-    torch.testing.assert_close(z, ref_z)
+    assert_close(z, ref_z)
 
 
 @pytest.mark.parametrize("iter_factory", (list, tuple, itertools.chain))
@@ -90,10 +92,12 @@ def test_shape_op_with_list_or_tuple(require_c310, asc_op, torch_op, dst_shape, 
 
 
 @pytest.mark.parametrize("shape", ([32], [3, 32]))
-@pytest.mark.parametrize(
-    "dtype", (torch.int8, torch.int16, torch.int32, torch.int64, torch.float16, torch.bfloat16, torch.float32))
+@pytest.mark.parametrize("dtype", (torch.int8, torch.int16, torch.int32, torch.int64, torch.float16, torch.bfloat16,
+                                   torch.float32, torch.float8_e5m2, torch.float8_e4m3fn))
 def test_broadcast_dup(require_c310, shape, dtype):
-    if dtype in (torch.int8, torch.int64):
+    if dtype in (torch.int8, torch.int64, torch.float8_e5m2, torch.float8_e4m3fn):
+        require_c310()
+    if dtype in [torch.float8_e5m2, torch.float8_e4m3fn]:
         require_c310()
 
     @asctile.jit(always_compile=True)
@@ -106,4 +110,4 @@ def test_broadcast_dup(require_c310, shape, dtype):
     out_ref = torch.full_like(out, 77)
     size = tuple(out.size())
     kernel[1](out, size, [0] * len(size))
-    torch.testing.assert_close(out, out_ref)
+    assert_close(out, out_ref)

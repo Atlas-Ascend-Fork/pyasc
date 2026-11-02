@@ -14,7 +14,8 @@ from ..target.test_vadd import add as vadd_kernel
 def vadd_launch(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     out = np.empty_like(x)
     core_num = 16
-    vadd_kernel[core_num](x, y, out, out.size, tile_length=128, unroll_factor=2, always_compile=True)
+    vadd_kernel[core_num](x, y, out, out.size, tile_length=128, unroll_factor=2, l2_cache=(False, False, True),
+                          always_compile=True)
     return out
 
 

@@ -1293,6 +1293,74 @@ func.func @lower_load_gm_l1_b_unaligned_k_f32(%arg0: memref<*xf32, 22>, %arg1: i
   return %1 : tensor<56x64xf32, #asctile.local<L1>>
 }
 
+// CHECK-LABEL: func.func @lower_reindex_i32(%arg0: tensor<8xf32, #asctile.local<UB>>, %arg1: tensor<8xi32, #asctile.local<UB>>) -> tensor<8xf32, #asctile.local<UB>> {
+// CHECK:       %0 = builtin.unrealized_conversion_cast %arg1 : tensor<8xi32, #asctile.local<UB>> to !ascendc.local_tensor<8xi32>
+// CHECK-NEXT:  %1 = builtin.unrealized_conversion_cast %arg0 : tensor<8xf32, #asctile.local<UB>> to !ascendc.local_tensor<8xf32>
+// CHECK-NEXT:  %2 = ascendc.local_tensor_auto veccalc() : <8xf32>
+// CHECK-NEXT:  %3 = ascendc.local_tensor_auto veccalc() : <8xi32>
+// CHECK-NEXT:  ascendc.muls_l2 %3, %0, %c4_i32, %c8_i64 : !ascendc.local_tensor<8xi32>, !ascendc.local_tensor<8xi32>, i32, i64
+// CHECK-NEXT:  %4 = ascendc.reinterpret_cast %3 : !ascendc.local_tensor<8xi32> to !ascendc.local_tensor<8xui32>
+// CHECK-NEXT:  ascendc.gather_l2 %2, %1, %4, %c0_i32, %c8_i64 : !ascendc.local_tensor<8xf32>, !ascendc.local_tensor<8xf32>, !ascendc.local_tensor<8xui32>, i32, i64
+// CHECK-NEXT:  %5 = builtin.unrealized_conversion_cast %2 : !ascendc.local_tensor<8xf32> to tensor<8xf32, #asctile.local<UB>>
+// CHECK-NEXT:  return %5 : tensor<8xf32, #asctile.local<UB>>
+// CHECK-NEXT:}
+func.func @lower_reindex_i32(%arg0: tensor<8xf32, #asctile.local<UB>>, %arg1: tensor<8xi32, #asctile.local<UB>>) -> tensor<8xf32, #asctile.local<UB>> {
+  %0 = asctile.reindex %arg0, %arg1 : tensor<8xf32, #asctile.local<UB>>, tensor<8xi32, #asctile.local<UB>>, tensor<8xf32, #asctile.local<UB>>
+  return %0 : tensor<8xf32, #asctile.local<UB>>
+}
+
+// CHECK-LABEL: func.func @lower_reindex_i16(%arg0: tensor<8xf32, #asctile.local<UB>>, %arg1: tensor<8xi16, #asctile.local<UB>>) -> tensor<8xf32, #asctile.local<UB>> {
+// CHECK:       %0 = builtin.unrealized_conversion_cast %arg1 : tensor<8xi16, #asctile.local<UB>> to !ascendc.local_tensor<8xi16>
+// CHECK-NEXT:  %1 = builtin.unrealized_conversion_cast %arg0 : tensor<8xf32, #asctile.local<UB>> to !ascendc.local_tensor<8xf32>
+// CHECK-NEXT:  %2 = ascendc.local_tensor_auto veccalc() : <8xf32>
+// CHECK-NEXT:  %3 = ascendc.local_tensor_auto veccalc() : <8xi32>
+// CHECK-NEXT:  ascendc.cast_l2 %3, %0, %c8_i64 {roundMode = 0 : i32} : !ascendc.local_tensor<8xi32>, !ascendc.local_tensor<8xi16>, i64
+// CHECK-NEXT:  %4 = ascendc.local_tensor_auto veccalc() : <8xi32>
+// CHECK-NEXT:  ascendc.muls_l2 %4, %3, %c4_i32, %c8_i64 : !ascendc.local_tensor<8xi32>, !ascendc.local_tensor<8xi32>, i32, i64
+// CHECK-NEXT:  %5 = ascendc.reinterpret_cast %4 : !ascendc.local_tensor<8xi32> to !ascendc.local_tensor<8xui32>
+// CHECK-NEXT:  ascendc.gather_l2 %2, %1, %5, %c0_i32, %c8_i64 : !ascendc.local_tensor<8xf32>, !ascendc.local_tensor<8xf32>, !ascendc.local_tensor<8xui32>, i32, i64
+// CHECK-NEXT:  %6 = builtin.unrealized_conversion_cast %2 : !ascendc.local_tensor<8xf32> to tensor<8xf32, #asctile.local<UB>>
+// CHECK-NEXT:  return %6 : tensor<8xf32, #asctile.local<UB>>
+// CHECK-NEXT:}
+func.func @lower_reindex_i16(%arg0: tensor<8xf32, #asctile.local<UB>>, %arg1: tensor<8xi16, #asctile.local<UB>>) -> tensor<8xf32, #asctile.local<UB>> {
+  %0 = asctile.reindex %arg0, %arg1 : tensor<8xf32, #asctile.local<UB>>, tensor<8xi16, #asctile.local<UB>>, tensor<8xf32, #asctile.local<UB>>
+  return %0 : tensor<8xf32, #asctile.local<UB>>
+}
+
+// CHECK-LABEL: func.func @lower_reindex_i64(%arg0: tensor<8xf32, #asctile.local<UB>>, %arg1: tensor<8xi64, #asctile.local<UB>>) -> tensor<8xf32, #asctile.local<UB>> {
+// CHECK:       %0 = builtin.unrealized_conversion_cast %arg1 : tensor<8xi64, #asctile.local<UB>> to !ascendc.local_tensor<8xi64>
+// CHECK-NEXT:  %1 = builtin.unrealized_conversion_cast %arg0 : tensor<8xf32, #asctile.local<UB>> to !ascendc.local_tensor<8xf32>
+// CHECK-NEXT:  %2 = ascendc.local_tensor_auto veccalc() : <8xf32>
+// CHECK-NEXT:  %3 = ascendc.local_tensor_auto veccalc() : <8xi32>
+// CHECK-NEXT:  ascendc.cast_l2 %3, %0, %c8_i64 {roundMode = 0 : i32} : !ascendc.local_tensor<8xi32>, !ascendc.local_tensor<8xi64>, i64
+// CHECK-NEXT:  %4 = ascendc.local_tensor_auto veccalc() : <8xi32>
+// CHECK-NEXT:  ascendc.muls_l2 %4, %3, %c4_i32, %c8_i64 : !ascendc.local_tensor<8xi32>, !ascendc.local_tensor<8xi32>, i32, i64
+// CHECK-NEXT:  %5 = ascendc.reinterpret_cast %4 : !ascendc.local_tensor<8xi32> to !ascendc.local_tensor<8xui32>
+// CHECK-NEXT:  ascendc.gather_l2 %2, %1, %5, %c0_i32, %c8_i64 : !ascendc.local_tensor<8xf32>, !ascendc.local_tensor<8xf32>, !ascendc.local_tensor<8xui32>, i32, i64
+// CHECK-NEXT:  %6 = builtin.unrealized_conversion_cast %2 : !ascendc.local_tensor<8xf32> to tensor<8xf32, #asctile.local<UB>>
+// CHECK-NEXT:  return %6 : tensor<8xf32, #asctile.local<UB>>
+// CHECK-NEXT:}
+func.func @lower_reindex_i64(%arg0: tensor<8xf32, #asctile.local<UB>>, %arg1: tensor<8xi64, #asctile.local<UB>>) -> tensor<8xf32, #asctile.local<UB>> {
+  %0 = asctile.reindex %arg0, %arg1 : tensor<8xf32, #asctile.local<UB>>, tensor<8xi64, #asctile.local<UB>>, tensor<8xf32, #asctile.local<UB>>
+  return %0 : tensor<8xf32, #asctile.local<UB>>
+}
+
+// CHECK-LABEL: func.func @lower_reindex_2d_src(%arg0: tensor<4x8xf32, #asctile.local<UB>>, %arg1: tensor<8xi32, #asctile.local<UB>>) -> tensor<8xf32, #asctile.local<UB>> {
+// CHECK:       %0 = builtin.unrealized_conversion_cast %arg1 : tensor<8xi32, #asctile.local<UB>> to !ascendc.local_tensor<8xi32>
+// CHECK-NEXT:  %1 = builtin.unrealized_conversion_cast %arg0 : tensor<4x8xf32, #asctile.local<UB>> to !ascendc.local_tensor<4x8xf32>
+// CHECK-NEXT:  %2 = ascendc.local_tensor_auto veccalc() : <8xf32>
+// CHECK-NEXT:  %3 = ascendc.local_tensor_auto veccalc() : <8xi32>
+// CHECK-NEXT:  ascendc.muls_l2 %3, %0, %c4_i32, %c8_i64 : !ascendc.local_tensor<8xi32>, !ascendc.local_tensor<8xi32>, i32, i64
+// CHECK-NEXT:  %4 = ascendc.reinterpret_cast %3 : !ascendc.local_tensor<8xi32> to !ascendc.local_tensor<8xui32>
+// CHECK-NEXT:  ascendc.gather_l2 %2, %1, %4, %c0_i32, %c8_i64 : !ascendc.local_tensor<8xf32>, !ascendc.local_tensor<4x8xf32>, !ascendc.local_tensor<8xui32>, i32, i64
+// CHECK-NEXT:  %5 = builtin.unrealized_conversion_cast %2 : !ascendc.local_tensor<8xf32> to tensor<8xf32, #asctile.local<UB>>
+// CHECK-NEXT:  return %5 : tensor<8xf32, #asctile.local<UB>>
+// CHECK-NEXT:}
+func.func @lower_reindex_2d_src(%arg0: tensor<4x8xf32, #asctile.local<UB>>, %arg1: tensor<8xi32, #asctile.local<UB>>) -> tensor<8xf32, #asctile.local<UB>> {
+  %0 = asctile.reindex %arg0, %arg1 : tensor<4x8xf32, #asctile.local<UB>>, tensor<8xi32, #asctile.local<UB>>, tensor<8xf32, #asctile.local<UB>>
+  return %0 : tensor<8xf32, #asctile.local<UB>>
+}
+
 // -----
 
 module attributes {ascendc.cv_ratio = 2 : i64} {

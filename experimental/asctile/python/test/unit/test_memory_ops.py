@@ -574,3 +574,76 @@ class TestScatter:
 
         kernel[1](MockTensor(asctile.float32))
         assert mock_launch.call_count == 1
+
+
+class TestReindex:
+
+    @pytest.mark.parametrize("dtype", valid_dtypes)
+    @pytest.mark.parametrize("index_dtype", index_dtypes)
+    def test_reindex(self, jit_test, mock_launch, zero_tile, dtype, index_dtype):
+
+        @jit_test
+        def kernel():
+            src = zero_tile([128], dtype)
+            index = asctile.full([64], 0, index_dtype)
+            asctile.reindex(src, index)
+
+        kernel[1]()
+        assert mock_launch.call_count == 1
+
+    @pytest.mark.parametrize("dtype", valid_dtypes)
+    @pytest.mark.parametrize("index_dtype", index_dtypes)
+    def test_reindex_2d_src(self, jit_test, mock_launch, zero_tile, dtype, index_dtype):
+
+        @jit_test
+        def kernel():
+            src = zero_tile([16, 8], dtype)
+            index = asctile.full([64], 0, index_dtype)
+            asctile.reindex(src, index)
+
+        kernel[1]()
+        assert mock_launch.call_count == 1
+
+    @pytest.mark.parametrize("dtype", valid_dtypes)
+    @pytest.mark.parametrize("index_dtype", index_dtypes)
+    def test_reindex_2d_index(self, jit_test, mock_launch, zero_tile, dtype, index_dtype):
+
+        @jit_test
+        def kernel():
+            src = zero_tile([128], dtype)
+            index = asctile.full([4, 32], 0, index_dtype)
+            asctile.reindex(src, index)
+
+        kernel[1]()
+        assert mock_launch.call_count == 1
+
+    def test_reindex_invalid_src_type(self, jit_test):
+
+        @jit_test
+        def kernel():
+            index = asctile.full([64], 0, asctile.int32)
+            asctile.reindex("invalid", index)
+
+        with pytest.raises(TypeError, match="src"):
+            kernel[1]()
+
+    def test_reindex_invalid_index_type(self, jit_test, zero_tile):
+
+        @jit_test
+        def kernel():
+            src = zero_tile([128], asctile.float32)
+            asctile.reindex(src, "invalid")
+
+        with pytest.raises(TypeError, match="index"):
+            kernel[1]()
+
+    def test_reindex_invalid_index_dtype(self, jit_test, zero_tile):
+
+        @jit_test
+        def kernel():
+            src = zero_tile([128], asctile.float32)
+            index = asctile.full([64], 0, asctile.float32)
+            asctile.reindex(src, index)
+
+        with pytest.raises(RuntimeError, match="index"):
+            kernel[1]()

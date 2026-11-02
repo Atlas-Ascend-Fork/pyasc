@@ -99,6 +99,8 @@ struct ConvertCast : ConvertOp<asctile::CastOp> {
                 return ascendc::RoundMode::CAST_RINT;
             if (srcWidth == 16 && dstWidth == 16 && srcType != dstType)
                 return ascendc::RoundMode::CAST_RINT;
+            if (srcWidth == 32 && dstWidth == 8)
+                return ascendc::RoundMode::CAST_RINT;
             return ascendc::RoundMode::CAST_NONE;
         }
         return ascendc::RoundMode::CAST_NONE;
@@ -123,6 +125,10 @@ struct ConvertCast : ConvertOp<asctile::CastOp> {
                 return mode == asctile::RoundMode::NoRound;
             if (isa<Float32Type>(srcType) && isa<Float32Type>(dstType))
                 return mode != asctile::RoundMode::Odd && mode != asctile::RoundMode::NoRound;
+            if (isa<Float32Type>(srcType) && isa<Float8E4M3FNType, Float8E5M2Type>(dstType))
+                return mode == asctile::RoundMode::Rint;
+            if (isa<Float8E4M3FNType, Float8E5M2Type>(srcType) && isa<Float32Type>(dstType))
+                return mode == asctile::RoundMode::NoRound;
             return mode != asctile::RoundMode::Odd && mode != asctile::RoundMode::NoRound;
         }
         if (srcIsFloat && dstIsInt) {

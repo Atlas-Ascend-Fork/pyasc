@@ -110,6 +110,61 @@ func.func @resolve_if_auto(%arg0: i1, %arg1: tensor<32xf32, #asctile.local<UB>>)
   return %final : tensor<32xf32, #asctile.local<UB>>
 }
 
+// CHECK-LABEL: func.func @resolve_cv_strategy_direct_copy_join_by_m_auto(%arg0: tensor<16x64xf32, #asctile.local<UB>>) -> tensor<32x64xf32, #asctile.local<L1>> {
+// CHECK-NEXT: %c0_i32 = arith.constant 0 : i32
+// CHECK-NEXT: %0 = asctile.cv_strategy <split_by_m> -> tensor<16x64xf32, #asctile.local<UB>> {
+// CHECK-NEXT: asctile.yield %arg0 : tensor<16x64xf32, #asctile.local<UB>>
+// CHECK-NEXT: }
+// CHECK-NEXT: %1 = asctile.copy %0[%c0_i32, %c0_i32] {distrib = #asctile.distrib_mode<join_by_m>} : tensor<16x64xf32, #asctile.local<UB>>, tensor<32x64xf32, #asctile.local<L1>>
+// CHECK-NEXT: return %1 : tensor<32x64xf32, #asctile.local<L1>>
+// CHECK-NEXT:}
+func.func @resolve_cv_strategy_direct_copy_join_by_m_auto(%arg0: tensor<16x64xf32, #asctile.local<UB>>) -> tensor<32x64xf32, #asctile.local<L1>> {
+  %auto = asctile.cv_strategy <split_by_m> -> tensor<16x64xf32, #asctile.local<auto>> {
+    %cast = tensor.cast %arg0 : tensor<16x64xf32, #asctile.local<UB>> to tensor<16x64xf32, #asctile.local<auto>>
+    asctile.yield %cast : tensor<16x64xf32, #asctile.local<auto>>
+  }
+  %c0 = arith.constant 0 : i32
+  %result = asctile.copy %auto[%c0, %c0] {distrib = #asctile.distrib_mode<join_by_m>} : tensor<16x64xf32, #asctile.local<auto>>, tensor<32x64xf32, #asctile.local<L1>>
+  return %result : tensor<32x64xf32, #asctile.local<L1>>
+}
+
+// CHECK-LABEL: func.func @resolve_cv_strategy_direct_copy_join_by_n_auto(%arg0: tensor<32x32xf32, #asctile.local<UB>>) -> tensor<32x64xf32, #asctile.local<L1>> {
+// CHECK-NEXT: %c0_i32 = arith.constant 0 : i32
+// CHECK-NEXT: %0 = asctile.cv_strategy <split_by_n> -> tensor<32x32xf32, #asctile.local<UB>> {
+// CHECK-NEXT: asctile.yield %arg0 : tensor<32x32xf32, #asctile.local<UB>>
+// CHECK-NEXT: }
+// CHECK-NEXT: %1 = asctile.copy %0[%c0_i32, %c0_i32] {distrib = #asctile.distrib_mode<join_by_n>} : tensor<32x32xf32, #asctile.local<UB>>, tensor<32x64xf32, #asctile.local<L1>>
+// CHECK-NEXT: return %1 : tensor<32x64xf32, #asctile.local<L1>>
+// CHECK-NEXT:}
+func.func @resolve_cv_strategy_direct_copy_join_by_n_auto(%arg0: tensor<32x32xf32, #asctile.local<UB>>) -> tensor<32x64xf32, #asctile.local<L1>> {
+  %auto = asctile.cv_strategy <split_by_n> -> tensor<32x32xf32, #asctile.local<auto>> {
+    %cast = tensor.cast %arg0 : tensor<32x32xf32, #asctile.local<UB>> to tensor<32x32xf32, #asctile.local<auto>>
+    asctile.yield %cast : tensor<32x32xf32, #asctile.local<auto>>
+  }
+  %c0 = arith.constant 0 : i32
+  %result = asctile.copy %auto[%c0, %c0] {distrib = #asctile.distrib_mode<join_by_n>} : tensor<32x32xf32, #asctile.local<auto>>, tensor<32x64xf32, #asctile.local<L1>>
+  return %result : tensor<32x64xf32, #asctile.local<L1>>
+}
+
+// CHECK-LABEL: func.func @resolve_cv_strategy_direct_copy_l0a_auto(%arg0: tensor<16x64xf32, #asctile.local<UB>>) -> tensor<16x32xf32, #asctile.local<L0A>> {
+// CHECK-NEXT: %c0_i32 = arith.constant 0 : i32
+// CHECK-NEXT: %0 = asctile.cv_strategy <split_by_m> -> tensor<16x64xf32, #asctile.local<L1>> {
+// CHECK-NEXT: %cast = tensor.cast %arg0 : tensor<16x64xf32, #asctile.local<UB>> to tensor<16x64xf32, #asctile.local<L1>>
+// CHECK-NEXT: asctile.yield %cast : tensor<16x64xf32, #asctile.local<L1>>
+// CHECK-NEXT: }
+// CHECK-NEXT: %1 = asctile.copy %0[%c0_i32, %c0_i32] : tensor<16x64xf32, #asctile.local<L1>>, tensor<16x32xf32, #asctile.local<L0A>>
+// CHECK-NEXT: return %1 : tensor<16x32xf32, #asctile.local<L0A>>
+// CHECK-NEXT:}
+func.func @resolve_cv_strategy_direct_copy_l0a_auto(%arg0: tensor<16x64xf32, #asctile.local<UB>>) -> tensor<16x32xf32, #asctile.local<L0A>> {
+  %auto = asctile.cv_strategy <split_by_m> -> tensor<16x64xf32, #asctile.local<auto>> {
+    %cast = tensor.cast %arg0 : tensor<16x64xf32, #asctile.local<UB>> to tensor<16x64xf32, #asctile.local<auto>>
+    asctile.yield %cast : tensor<16x64xf32, #asctile.local<auto>>
+  }
+  %c0 = arith.constant 0 : i32
+  %result = asctile.copy %auto[%c0, %c0] : tensor<16x64xf32, #asctile.local<auto>>, tensor<16x32xf32, #asctile.local<L0A>>
+  return %result : tensor<16x32xf32, #asctile.local<L0A>>
+}
+
 // CHECK-LABEL: func.func @reconcile_cast_chain(%arg0: tensor<32xf32, #asctile.local<UB>>) -> tensor<32xf32, #asctile.local<UB>> {
 // CHECK-NEXT: return %arg0 : tensor<32xf32, #asctile.local<UB>>
 // CHECK-NEXT:}

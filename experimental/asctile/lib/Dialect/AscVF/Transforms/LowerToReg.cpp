@@ -167,7 +167,7 @@ Value makeNestedLoop(ArrayRef<int64_t> dims, ArrayRef<int64_t> strides, Rewriter
     return offset;
 }
 
-template <typename L2Op, typename RegOp>
+template <typename L2Op, typename RegOp, bool useUpdateMask = false>
 struct ConvertBinaryL2 : public ConvertOp<L2Op> {
     using ConvertOp<L2Op>::ConvertOp;
     using ConvertOp<L2Op>::vfInfo;
@@ -182,7 +182,6 @@ struct ConvertBinaryL2 : public ConvertOp<L2Op> {
         auto [src0Reg, src1Reg, dstReg] = adaptor.createRegTensors<3>(vfInfo.elemType);
         auto countVal = consts.index(dims.back());
         Value calCount = adaptor.createUI32Variable(countVal);
-        Value maskAll = adaptor.createMaskOp(vfInfo.elemType);
         Value repeatTimes = adaptor.create<arith::CeilDivSIOp>(adaptor->getIndexType(), countVal, vfInfo.oneRepeatSize);
         auto loop = adaptor.create<emitasc::VFForOp>(repeatTimes);
         adaptor->setInsertionPointToStart(loop.getBody());
@@ -191,14 +190,19 @@ struct ConvertBinaryL2 : public ConvertOp<L2Op> {
         offset = adaptor.create<arith::AddIOp>(offset, mulOp);
         auto load1Op = adaptor.create<ascvf::LoadOp>(src0Reg, op.getSrc0(), offset, updateMask);
         auto load2Op = adaptor.create<ascvf::LoadOp>(src1Reg, op.getSrc1(), offset, updateMask);
-        adaptor.create<RegOp>(dstReg, src0Reg, src1Reg, maskAll);
+        if constexpr (useUpdateMask) {
+            adaptor.create<RegOp>(dstReg, src0Reg, src1Reg, updateMask);
+        } else {
+            Value maskAll = adaptor.createMaskOp(vfInfo.elemType);
+            adaptor.create<RegOp>(dstReg, src0Reg, src1Reg, maskAll);
+        }
         auto storeOp = adaptor.create<ascvf::StoreOp>(op.getDst(), offset, dstReg, updateMask);
         adaptor->eraseOp(op);
         return success();
     }
 };
 
-template <typename L2Op, typename RegOp>
+template <typename L2Op, typename RegOp, bool useUpdateMask = false>
 struct ConvertUnaryL2 : public ConvertOp<L2Op> {
     using ConvertOp<L2Op>::ConvertOp;
     using ConvertOp<L2Op>::vfInfo;
@@ -219,7 +223,12 @@ struct ConvertUnaryL2 : public ConvertOp<L2Op> {
         Value updateMask = adaptor.updateMaskOp(calCount, vfInfo.elemType);
         offset = adaptor.createFMA(offset, loop.getInductionVar(), vfInfo.oneRepeatSize);
         auto loadOp = adaptor.create<ascvf::LoadOp>(srcReg, op.getSrc(), offset, updateMask);
-        adaptor.create<RegOp>(dstReg, srcReg, maskAll);
+        if constexpr (useUpdateMask) {
+            adaptor.create<RegOp>(dstReg, srcReg, updateMask);
+        } else {
+            Value maskAll = adaptor.createMaskOp(vfInfo.elemType);
+            adaptor.create<RegOp>(dstReg, srcReg, maskAll);
+        }
         auto storeOp = adaptor.create<ascvf::StoreOp>(op.getDst(), offset, dstReg, updateMask);
         adaptor->eraseOp(op);
         return success();
@@ -252,7 +261,7 @@ struct ConvertVecScalarL2 : public ConvertOp<L2Op> {
     }
 };
 
-template <typename L2Op, typename BinRegOp>
+template <typename L2Op, typename BinRegOp, bool useUpdateMask = false>
 struct ConvertVecScalarWithDuplicateL2 : public ConvertOp<L2Op> {
     using ConvertOp<L2Op>::ConvertOp;
     using ConvertOp<L2Op>::vfInfo;
@@ -266,15 +275,18 @@ struct ConvertVecScalarWithDuplicateL2 : public ConvertOp<L2Op> {
         auto [srcReg, dupReg, dstReg] = adaptor.createRegTensors<3>(vfInfo.elemType);
         Value countVal = consts.index(dims.back());
         Value calCount = adaptor.createUI32Variable(countVal);
-        Value maskAll = adaptor.createMaskOp(vfInfo.elemType);
         Value repeatTimes = adaptor.create<arith::CeilDivSIOp>(adaptor->getIndexType(), countVal, vfInfo.oneRepeatSize);
         auto loop = adaptor.create<emitasc::VFForOp>(repeatTimes);
         adaptor->setInsertionPointToStart(loop.getBody());
         Value updateMask = adaptor.updateMaskOp(calCount, vfInfo.elemType);
         offset = adaptor.createFMA(offset, loop.getInductionVar(), vfInfo.oneRepeatSize);
         adaptor.create<ascvf::LoadOp>(srcReg, op.getSrc(), offset, updateMask);
+        Value maskAll = adaptor.createMaskOp(vfInfo.elemType);
         adaptor.create<ascendc::DuplicateRegOp>(dupReg, op.getScalar(), maskAll);
-        adaptor.create<BinRegOp>(dstReg, srcReg, dupReg, maskAll);
+        if constexpr (useUpdateMask)
+            adaptor.create<BinRegOp>(dstReg, srcReg, dupReg, updateMask);
+        else
+            adaptor.create<BinRegOp>(dstReg, srcReg, dupReg, maskAll);
         adaptor.create<ascvf::StoreOp>(op.getDst(), offset, dstReg, updateMask);
         adaptor->eraseOp(op);
         return success();
@@ -295,7 +307,7 @@ struct ConvertReduceL2 : public ConvertOp<ReduceL2Op> {
             if (elemType.isF16())
                 return consts.f16(-std::numeric_limits<float>::infinity());
             if (elemType.isInteger(32))
-                return consts.i32(-std::numeric_limits<int>::infinity());
+                return consts.i32(std::numeric_limits<int>::lowest());
         }
         if constexpr (std::is_same_v<ReduceOpType, ascendc::ReduceSumL2Op>) {
             if (elemType.isF32())
@@ -311,7 +323,7 @@ struct ConvertReduceL2 : public ConvertOp<ReduceL2Op> {
             if (elemType.isF16())
                 return consts.f16(std::numeric_limits<float>::infinity());
             if (elemType.isInteger(32))
-                return consts.i32(std::numeric_limits<int>::infinity());
+                return consts.i32(std::numeric_limits<int>::max());
         }
         llvm_unreachable("unknown neutral element");
     }
@@ -396,9 +408,8 @@ struct ConvertCompareScalar : public ConvertOp<ascendc::CompareScalarL2Op> {
         const auto& dims = vfInfo.shape;
         Value offset =
             makeNestedLoop(ArrayRef<int64_t>{dims}.drop_back(), ArrayRef<int64_t>{vfInfo.strides}.drop_back(), adaptor);
-        auto srcReg = adaptor.createRegTensor(vfInfo.elemType);
+        auto [srcReg, tmpReg] = adaptor.createRegTensors<2>(vfInfo.elemType);
         auto dstReg = adaptor.create<ascendc::MaskRegOp>(ascendc::MaskRegType::get(op.getContext()));
-        auto scalarVal = op.getSrc1Scalar();
         auto srcType = dyn_cast<ascendc::LocalTensorType>(op.getSrc0().getType());
         auto dstType = dyn_cast<ascendc::LocalTensorType>(op.getDst().getType());
         assert(srcType && "CompareScalarL2Op must have LocalTensorType");
@@ -411,8 +422,17 @@ struct ConvertCompareScalar : public ConvertOp<ascendc::CompareScalarL2Op> {
         Value updateMask = adaptor.updateMaskOp(sreg, vfInfo.elemType);
         Value loadOffset = adaptor.createFMA(offset, loop.getInductionVar(), vfInfo.oneRepeatSize);
         auto loadOp = adaptor.create<ascvf::LoadOp>(srcReg, op.getSrc0(), loadOffset, updateMask);
-        adaptor.create<ascendc::CompareScalarRegOp>(dstReg, srcReg, op.getSrc1Scalar(), updateMask, op.getCmpMode());
 
+        auto scalarVal = op.getSrc1Scalar();
+        if (isa<ascendc::LocalTensorType>(scalarVal.getType())) {
+            Value maskOne = adaptor.createMaskOp(vfInfo.elemType, ascendc::MaskPattern::VL1);
+            adaptor.create<ascvf::LoadOp>(srcReg, scalarVal, consts.index(0), maskOne);
+            Value maskAll = adaptor.createMaskOp(vfInfo.elemType);
+            adaptor.create<ascendc::DuplicateRegOp>(tmpReg, srcReg, maskAll);
+        } else {
+            adaptor.create<ascendc::DuplicateScalarRegOp>(tmpReg, scalarVal);
+        }
+        adaptor.create<ascendc::CompareRegOp>(dstReg, srcReg, tmpReg, updateMask, op.getCmpMode());
         auto sizeOfElem = consts.index(vfInfo.elemType.getIntOrFloatBitWidth() / CHAR_BIT);
         auto maskElemCount = adaptor.create<arith::DivSIOp>(vfInfo.vecLen, sizeOfElem);
         auto dstStrideBytes = adaptor.create<arith::DivSIOp>(maskElemCount, consts.index(CHAR_BIT));
@@ -503,7 +523,7 @@ LogicalResult create1DDuplicateScalar(ascendc::DuplicateL2Op op, RewriterAdaptor
     auto scalarVal = op.getScalar();
     if (isa<ascendc::LocalTensorType>(scalarVal.getType())) {
         Value maskOne = adaptor.createMaskOp(vfInfo.elemType, ascendc::MaskPattern::VL1);
-        adaptor.create<ascvf::LoadOp>(srcReg, op.getScalar(), consts.index(0), maskOne);
+        adaptor.create<ascvf::LoadOp>(srcReg, scalarVal, consts.index(0), maskOne);
         Value maskAll = adaptor.createMaskOp(vfInfo.elemType);
         adaptor.create<ascendc::DuplicateRegOp>(tmpReg, srcReg, maskAll);
     } else {
@@ -550,16 +570,79 @@ struct ConvertDuplicateL2 : public ConvertOp<ascendc::DuplicateL2Op> {
     }
 };
 
+// Row broadcast: the source is a single row of the destination's row length,
+// replicated over the destination rows (e.g. [1, C] -> [R, C]).
+//
+//      for (each row r) {
+//        for (each repeat chunk c) {
+//          mask = updateMask(calCount)              // calCount = C per row
+//          reg  = load(src, c * oneRepeatSize, mask)  // src offset: inner only
+//          store(dst, r * C + c * oneRepeatSize, reg, mask)
+//        }
+//      }
+//
+// Unlike the column broadcast, the whole row is copied, so this is a plain
+// load+store with no scalar duplication step.
+// A "row broadcast": the source's leading dims (row count) are all 1, its row
+// length matches the destination's, and the destination has rows to replicate
+// over.
+bool isRowBroadcast(Type type, ArrayRef<int64_t> dstShape)
+{
+    auto srcType = dyn_cast<ascendc::LocalTensorType>(type);
+    if (!srcType)
+        return false;
+    ArrayRef<int64_t> srcShape = srcType.getShape();
+    if (srcShape.size() != dstShape.size() || dstShape.size() < 2 || srcShape.back() != dstShape.back())
+        return false;
+    for (size_t i = 0; i + 1 < srcShape.size(); ++i) {
+        if (srcShape[i] != 1 || dstShape[i] <= 1)
+            return false;
+    }
+    return true;
+}
+
+LogicalResult create1DRowBroadcastCopy(ascendc::BroadcastOp op, RewriterAdaptor& adaptor, const VFInfo& vfInfo)
+{
+    ascir::ConstantOpBuilder consts(*adaptor);
+    const auto& dims = vfInfo.shape;
+    Value offsetDst = consts.index(0);
+    for (size_t i = 0; i < dims.size() - 1; ++i) {
+        auto loop = adaptor.create<emitasc::VFForOp>(consts.index(dims[i]));
+        adaptor->setInsertionPointToStart(loop.getBody());
+        auto mul = adaptor.create<arith::MulIOp>(loop.getInductionVar(), consts.index(vfInfo.strides[i]));
+        offsetDst = adaptor.create<arith::AddIOp>(offsetDst, mul);
+    }
+    auto srcReg = adaptor.createRegTensor(vfInfo.elemType);
+    Value countVal = consts.index(dims.back());
+    Value calCount = adaptor.createUI32Variable(countVal);
+    Value repeatTimes = adaptor.create<arith::CeilDivSIOp>(adaptor->getIndexType(), countVal, vfInfo.oneRepeatSize);
+    auto loop = adaptor.create<emitasc::VFForOp>(repeatTimes);
+    adaptor->setInsertionPointToStart(loop.getBody());
+    Value updateMask = adaptor.updateMaskOp(calCount, vfInfo.elemType);
+    Value innerOff = adaptor.create<arith::MulIOp>(loop.getInductionVar(), vfInfo.oneRepeatSize);
+    auto loadOp = adaptor.create<ascvf::LoadOp>(srcReg, op.getSrc(), innerOff, updateMask);
+    setAlignmentAttr(loadOp);
+    Value dstOff = adaptor.create<arith::AddIOp>(offsetDst, innerOff);
+    auto storeOp = adaptor.create<ascvf::StoreOp>(op.getDst(), dstOff, srcReg, updateMask);
+    setAlignmentAttr(storeOp);
+    adaptor->eraseOp(op);
+    return success();
+}
+
 struct ConvertBroadcast : public ConvertOp<ascendc::BroadcastOp> {
     using ConvertOp::ConvertOp;
     LogicalResult matchAndRewrite(ascendc::BroadcastOp op, RewriterAdaptor& adaptor) const override
     {
         ascir::ConstantOpBuilder consts(*adaptor);
         const auto& dims = vfInfo.shape;
+        assert(!dims.empty());
+
+        if (isRowBroadcast(op.getSrc().getType(), dims))
+            return create1DRowBroadcastCopy(op, adaptor, vfInfo);
+
         SmallVector<Value> indexes;
         Value offsetSrc = consts.index(0);
         Value offsetDst = consts.index(0);
-        assert(!dims.empty());
         for (size_t i = 0; i < dims.size() - 1; ++i) {
             auto loop = adaptor.create<emitasc::VFForOp>(consts.index(dims[i]));
             adaptor->setInsertionPointToStart(loop.getBody());
@@ -661,23 +744,24 @@ LogicalResult convertToReg(emitasc::VecScopeOp vecScopeOp)
     patterns.add<
         // BinaryOp
         ConvertBinaryL2<ascendc::AddL2Op, ascendc::AddRegOp>, ConvertBinaryL2<ascendc::AndL2Op, ascendc::AndRegOp>,
-        ConvertBinaryL2<ascendc::DivL2Op, ascendc::DivRegOp>, ConvertBinaryL2<ascendc::MaxL2Op, ascendc::MaxRegOp>,
-        ConvertBinaryL2<ascendc::MinL2Op, ascendc::MinRegOp>, ConvertBinaryL2<ascendc::MulL2Op, ascendc::MulRegOp>,
+        ConvertBinaryL2<ascendc::DivL2Op, ascendc::DivRegOp, true>,
+        ConvertBinaryL2<ascendc::MaxL2Op, ascendc::MaxRegOp>, ConvertBinaryL2<ascendc::MinL2Op, ascendc::MinRegOp>,
+        ConvertBinaryL2<ascendc::MulL2Op, ascendc::MulRegOp>,
         ConvertBinaryL2<ascendc::MulAddDstL2Op, ascendc::MulAddDstRegOp>,
         ConvertBinaryL2<ascendc::OrL2Op, ascendc::OrRegOp>, ConvertBinaryL2<ascendc::PreluL2Op, ascendc::PreluRegOp>,
         ConvertBinaryL2<ascendc::SubL2Op, ascendc::SubRegOp>,
         // UnaryOp
         ConvertUnaryL2<ascendc::AbsL2Op, ascendc::AbsRegOp>, ConvertUnaryL2<ascendc::ExpL2Op, ascendc::ExpRegOp>,
-        ConvertUnaryL2<ascendc::LnL2Op, ascendc::LnRegOp>, ConvertUnaryL2<ascendc::NegL2Op, ascendc::NegRegOp>,
+        ConvertUnaryL2<ascendc::LnL2Op, ascendc::LnRegOp, true>, ConvertUnaryL2<ascendc::NegL2Op, ascendc::NegRegOp>,
         ConvertUnaryL2<ascendc::NotL2Op, ascendc::NotRegOp>, ConvertUnaryL2<ascendc::ReluL2Op, ascendc::ReluRegOp>,
-        ConvertUnaryL2<ascendc::SqrtL2Op, ascendc::SqrtRegOp>,
+        ConvertUnaryL2<ascendc::SqrtL2Op, ascendc::SqrtRegOp, true>,
         // VecScalarOp
         ConvertVecScalarL2<ascendc::LeakyReluL2Op, ascendc::LeakyReluRegOp>,
         ConvertVecScalarL2<ascendc::ShiftLeftL2Op, ascendc::ShiftLeftsRegOp>,
         ConvertVecScalarL2<ascendc::ShiftRightL2Op, ascendc::ShiftRightsRegOp>,
         // VecScalarWithDuplicate
         ConvertVecScalarWithDuplicateL2<ascendc::AddsL2Op, ascendc::AddRegOp>,
-        ConvertVecScalarWithDuplicateL2<ascendc::DivsL2Op, ascendc::DivRegOp>,
+        ConvertVecScalarWithDuplicateL2<ascendc::DivsL2Op, ascendc::DivRegOp, true>,
         ConvertVecScalarWithDuplicateL2<ascendc::MaxsL2Op, ascendc::MaxRegOp>,
         ConvertVecScalarWithDuplicateL2<ascendc::MinsL2Op, ascendc::MinRegOp>,
         ConvertVecScalarWithDuplicateL2<ascendc::MulsL2Op, ascendc::MulRegOp>,

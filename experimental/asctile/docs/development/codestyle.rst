@@ -172,34 +172,18 @@ Code formatting and static analysis tools
 -----------------------------------------
 
 To help ensure that the code adheres to the coding style conventions automatically, it is strongly recommended using the following tools:
+``clang-format``, ``clang-tidy``, ``yapf``, ``ruff``.
 
-1. **clang-format**:
+Run linting before every commit using the ``pre-commit`` hooks:
 
-   - ``clang-format`` is a powerful tool for automatic code formatting, which can be configured to follow the project's coding style guide.
-   - The ``.clang-format`` configuration files are already set up in the project repository, therefore you can format a file with ``clang-format`` by running:
+.. code-block:: cpp
 
-     .. code-block:: bash
+   python3 -m pip install pre-commit
+   pre-commit install
 
-        clang-format -i <filename>
+Install and configure Visual Studio Code extensions to format files on save:
 
-   - Integrating ``clang-format`` into your IDE or editor can help you format code automatically on save. For example, there is `Clang-Format extension <https://marketplace.visualstudio.com/items?itemName=xaver.clang-format>`__ for Visual Studio Code.
-
-2. **clang-tidy**:
-
-   - ``clang-tidy`` is a static analysis tool that helps catch common issues and enforces coding standards and best practices. It works by checking your code against predefined or custom checks.
-   - ``clang-tidy`` can help identify issues related to code quality, unused variables, potential bugs, and performance improvements. It is recommended to check an output log of *clang-tidy* tool and address issues before merge.
-
-3. **yapf** and **ruff**:
-
-   - ``yapf`` is the Python formatter used by the project. Its configuration (based on the ``pep8`` style, a 120-column limit, and several layout tweaks) is defined under ``[tool.yapf]`` in ``pyproject.toml``.
-   - ``ruff`` is used for fast linting of Python code; the selected rule sets (``E4``, ``E7``, ``E9``, ``F``) and the ignored rules (e.g., ``E731``) are configured under ``[tool.ruff]`` in ``pyproject.toml``.
-   - Format and lint files in place with:
-
-     .. code-block:: bash
-
-        yapf -rip <filename-or-dir>
-        ruff check <filename-or-dir>
-
-   - Both run automatically through ``pre-commit``.
+- `Clang-Format extension <https://marketplace.visualstudio.com/items?itemName=xaver.clang-format>`__
+- `yapf extension <https://marketplace.visualstudio.com/items?itemName=eeyore.yapf>`__
 
 This style guide serves to maintain consistency across the codebase, making it easier to read, maintain, and extend. Adhering to these conventions will improve collaboration, reduce errors, and make it easier for new contributors to get up to speed.

@@ -84,9 +84,8 @@ def APIOpInterface : AscendC_OpInterface<"APIOp"> {
 }
 
 def OpWithDstInterface : AscendC_OpInterface<"OpWithDst"> {
-  let description = "Operation with `dst` operand (typically tensor)";
+  let description = "Operation with destination tensor operands";
   let methods = [
-    getDst,
     InterfaceMethod<"Get dst tensors", "::llvm::SmallVector<::mlir::Value>",
                     "getDstTensors", /*args*/ (ins), /*methodBody*/ "",
                     /*defaultImplementation*/ "return {$_op.getDst()};">,
@@ -98,7 +97,7 @@ def OpWithSrcInterface : AscendC_OpInterface<"OpWithSrc"> {
   let methods = [InterfaceMethod<"Get source tensors", "::llvm::SmallVector<::mlir::Value>", "getSrcTensors">];
 }
 
-def OpWithReusableSrcInterface : AscendC_OpInterface<"OpWithReusableSrc"> {
+def OpWithReusableSrcInterface : AscendC_OpInterface<"OpWithReusableSrc", [OpWithSrcInterface, OpWithDstInterface]> {
   let description = [{
     Marker interface for operations where hardware reads all source operands
     completely before writing the destination. This property allows the source
@@ -106,6 +105,16 @@ def OpWithReusableSrcInterface : AscendC_OpInterface<"OpWithReusableSrc"> {
     ReuseTensorAllocation pass). Operations like BroadcastOp that read sources
     multiple times during execution must NOT have this interface.
   }];
+  let methods = [
+    InterfaceMethod<"Check if tensor operands can share the same buffer", "bool",
+                    "canReuse", /*args*/ (ins "OpOperand&":$lhs, "OpOperand&":$rhs), /*methodBody*/ "",
+                    /*defaultImplementation*/  [{
+        auto dstTensors = $_op.getDstTensors();
+        auto srcTensors = $_op.getSrcTensors();
+        return llvm::is_contained(dstTensors, lhs.get()) && llvm::is_contained(srcTensors, rhs.get()) ||
+               llvm::is_contained(dstTensors, rhs.get()) && llvm::is_contained(srcTensors, lhs.get());
+      }]>,
+  ];
 }
 
 def VectorOpInterface : AscendC_OpInterface<"VectorOp", [APIOpInterface]> {
@@ -121,6 +130,7 @@ def DataCopyOpInterface
     : AscendC_OpInterface<"DataCopyOp", [APIOpInterface, OpWithDstInterface]> {
   let description = "Data copy operation";
   let methods = [
+    getDst,
     getSrc,
     StaticInterfaceMethod<"Get attr name", "::llvm::StringLiteral",
       "getDirectionAttrName", (ins), "", [{ return "direction"; }]>,
@@ -167,7 +177,7 @@ def UnaryOpInterface : AscendC_OpInterface<"UnaryOp", [
   VectorOpInterface, OpWithDstInterface, OpWithSrcInterface, OpWithReusableSrcInterface
 ]> {
   let description = "Vector unary operation";
-  let methods = [getSrc];
+  let methods = [getDst, getSrc];
 }
 
 def UnaryL0OpInterface : AscendC_OpInterface<"UnaryL0Op", [UnaryOpInterface]> {
@@ -197,7 +207,7 @@ def BinaryOpInterface : AscendC_OpInterface<"BinaryOp", [
   VectorOpInterface, OpWithDstInterface, OpWithSrcInterface, OpWithReusableSrcInterface
 ]> {
   let description = "Vector binary operation";
-  let methods = [getSrc0, getSrc1];
+  let methods = [getDst, getSrc0, getSrc1];
 }
 
 def BinaryL0OpInterface : AscendC_OpInterface<"BinaryL0Op", [BinaryOpInterface]> {
@@ -231,7 +241,7 @@ def VecScalarOpInterface : AscendC_OpInterface<"VecScalarOp", [
   VectorOpInterface, OpWithDstInterface, OpWithSrcInterface, OpWithReusableSrcInterface
 ]> {
   let description = "Vector-scalar operation";
-  let methods = [getSrc, getScalar, getScalarMutable];
+  let methods = [getDst, getSrc, getScalar, getScalarMutable];
 }
 
 def VecScalarL0OpInterface : AscendC_OpInterface<"VecScalarL0Op", [VecScalarOpInterface]> {
@@ -280,6 +290,7 @@ def MathLibraryOpInterface : AscendC_OpInterface<"MathLibraryOp", [
   VectorOpInterface, OpWithDstInterface, OpWithSrcInterface
 ]> {
   let description = "Math library operation";
+  let methods = [getDst];
 }
 
 def UnaryMathOpInterface : AscendC_OpInterface<"UnaryMathOp", [MathLibraryOpInterface]> {
@@ -308,7 +319,7 @@ def DataConversionOpInterface
 def ReduceOpInterface : AscendC_OpInterface<"ReduceOp", [
   VectorOpInterface, OpWithDstInterface, OpWithSrcInterface
 ]> {
-    let methods = [getPattern, getSharedTmpBuffer, getSrcShape, getSrc,
+    let methods = [getDst, getPattern, getSharedTmpBuffer, getSrcShape, getSrc,
                    GetMethod<"isReuseSource", "getIsReuseSource", "bool">];
 }
 

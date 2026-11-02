@@ -187,14 +187,6 @@ public:
                 insertSync(op, src);
             }
         }
-        if (auto fusedOp = dyn_cast<ascvf::VFGroupOp>(op)) {
-            for (auto dstTensor : fusedOp.getDstList()) {
-                insertSync(op, dstTensor);
-            }
-            for (auto srcTensor : fusedOp.getSrcList()) {
-                insertSync(op, srcTensor);
-            }
-        }
     }
 
     void setBufIdAttr(MLIRContext* context)

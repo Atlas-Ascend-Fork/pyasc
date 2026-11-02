@@ -185,3 +185,33 @@ func.func @prepare_split_over_different_yields(%arg0: tensor<32x64xf32, #asctile
   asctile.store %6, %arg2[%c0_i32, %c0_i32] : tensor<32x128xf32, #asctile.local<UB>>, tensor<32x128xf32, #asctile.global>
   return
 }
+
+// CHECK-LABEL: func.func @prepare_split_across_strategies_loop(
+// CHECK: %1:2 = asctile.cv_strategy <split_by_m> -> tensor<32x128xf32, #asctile.local<UB>>, tensor<32x128xf32, #asctile.local<UB>> {
+// CHECK: %4 = arith.mulf %3, %arg4 {asctile.need_split = #asctile.distrib_mode<split_by_m>, asctile.split_shape = array<i64: 16, 128>} : tensor<32x128xf32, #asctile.local<UB>>
+// CHECK: %2 = asctile.cv_strategy <split_by_m> -> tensor<32x128xf32, #asctile.local<UB>> {
+// CHECK: %4 = arith.mulf %arg4, %1#0 {asctile.need_split = #asctile.distrib_mode<split_by_m>, asctile.split_shape = array<i64: 16, 128>} : tensor<32x128xf32, #asctile.local<UB>>
+// CHECK: %5 = arith.addf %4, %3 {asctile.need_split = #asctile.distrib_mode<split_by_m>, asctile.split_shape = array<i64: 16, 128>} : tensor<32x128xf32, #asctile.local<UB>>
+// CHECK: return
+func.func @prepare_split_across_strategies_loop(%arg0: tensor<32x128xf32, #asctile.local<L0C>>, %arg1: tensor<32x128xf32, #asctile.local<UB>>, %arg2: tensor<32x128xf32, #asctile.global>) {
+  %c0_i32 = arith.constant 0 : i32
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %c4 = arith.constant 4 : index
+  %0 = scf.for %iv = %c0 to %c4 step %c1 iter_args(%arg3 = %arg1) -> tensor<32x128xf32, #asctile.local<UB>> {
+    %1:2 = asctile.cv_strategy <split_by_m> -> tensor<32x128xf32, #asctile.local<UB>>, tensor<32x128xf32, #asctile.local<UB>> {
+      %3 = asctile.copy %arg0[%c0_i32, %c0_i32] : tensor<32x128xf32, #asctile.local<L0C>>, tensor<32x128xf32, #asctile.local<UB>>
+      %4 = arith.mulf %3, %arg3 : tensor<32x128xf32, #asctile.local<UB>>
+      asctile.yield %4, %4 : tensor<32x128xf32, #asctile.local<UB>>, tensor<32x128xf32, #asctile.local<UB>>
+    }
+    %2 = asctile.cv_strategy <split_by_m> -> tensor<32x128xf32, #asctile.local<UB>> {
+      %5 = asctile.copy %arg0[%c0_i32, %c0_i32] : tensor<32x128xf32, #asctile.local<L0C>>, tensor<32x128xf32, #asctile.local<UB>>
+      %6 = arith.mulf %arg3, %1#0 : tensor<32x128xf32, #asctile.local<UB>>
+      %7 = arith.addf %6, %5 : tensor<32x128xf32, #asctile.local<UB>>
+      asctile.yield %7 : tensor<32x128xf32, #asctile.local<UB>>
+    }
+    scf.yield %2 : tensor<32x128xf32, #asctile.local<UB>>
+  }
+  asctile.store %0, %arg2[%c0_i32, %c0_i32] : tensor<32x128xf32, #asctile.local<UB>>, tensor<32x128xf32, #asctile.global>
+  return
+}
