@@ -31,7 +31,7 @@ class CodegenError(Exception):
         else:
             if hasattr(node, "lineno") and hasattr(node, "col_offset"):
                 message.append(f"at <source>:{node.lineno}:{node.col_offset}:")
-                excerpt = self.src[(node.lineno - self.context_lines - 1):node.lineno]
+                excerpt = self.src[max(0, node.lineno - self.context_lines - 1):node.lineno]
                 if excerpt:
                     message.extend(excerpt)
                     message.append(" " * node.col_offset + "^")
