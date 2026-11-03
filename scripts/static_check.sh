@@ -209,7 +209,29 @@ print_summary() {
 main() {
     log "[INFO] Checking changed code between $BASE_BRANCH and HEAD"
 
-    local cpp_files=$(git diff --name-only "$BASE_BRANCH" HEAD | grep -E '\.cpp$|\.h$')
+    # PR 提供的目标基线优先（检视建议：li-yuanjie-da）：
+    # CI 浅检出为预合并提交，其父提交 HEAD^ 即目标分支 tip——零网络依赖、
+    # 天然对齐 PR 目标分支；本地开发（多提交）时 HEAD^ 不适用，走下方 fetch 回退。
+    if git rev-parse --verify --quiet "HEAD^" >/dev/null 2>&1; then
+        log "[INFO] Using HEAD^ (PR pre-merge base) as diff baseline"
+        BASE_BRANCH="HEAD^"
+    fi
+    if ! git rev-parse --verify --quiet "$BASE_BRANCH" >/dev/null 2>&1; then
+        log "[INFO] $BASE_BRANCH not found locally (shallow checkout?), fetching from origin..."
+        git fetch origin master 2>/dev/null || git fetch --unshallow 2>/dev/null || true
+    fi
+    if ! git rev-parse --verify --quiet "$BASE_BRANCH" >/dev/null 2>&1; then
+        log "[WARNING] base branch $BASE_BRANCH unavailable; falling back to last-commit diff"
+        BASE_BRANCH="HEAD~1"
+        if ! git rev-parse --verify --quiet "$BASE_BRANCH" >/dev/null 2>&1; then
+            log "[WARNING] no parent commit available; nothing to diff, static check skipped"
+            print_summary
+            exit 0
+        fi
+    fi
+
+    local cpp_files
+    cpp_files=$(git diff --name-only "$BASE_BRANCH" HEAD | grep -E '\.cpp$|\.h$') || true
 
     if [[ -z "$cpp_files" ]]; then
         log "[INFO] No C/C++ files changed"
