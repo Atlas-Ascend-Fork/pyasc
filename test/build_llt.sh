@@ -295,7 +295,7 @@ function cmake_config()
 # 测试策略：
 # - PYTHON_TEST_TARGET=all：执行 $UT_PATH 全量pytest测试
 # - PYTHON_TEST_TARGET=模块名：执行 $UT_PATH/{模块名}/ 精准pytest测试
-# - 特殊处理：lib/host 模块需分开执行 host 和非host 测试
+# - 特殊处理：全量测试按 host 和非host 分组，lib/host 精准测试仅执行串行 host 测试
 #
 # 覆盖率支持：
 # - COV=true：使用 coverage 模块生成覆盖率数据到 ${CURRENT_DIR}/cov_py/
@@ -330,7 +330,9 @@ function run_python_ut()
         coverage report
         coverage html
     else
-        if [[ "${PYTHON_TEST_TARGET}" != "all" ]] && [[ "${PYTHON_TEST_TARGET}" != "lib/host" ]]; then
+        if [[ "${PYTHON_TEST_TARGET}" == "lib/host" ]] && [[ "${test_path}" == "$UT_PATH/lib/host" ]]; then
+            python3 -m pytest -v "${test_path}" -n 1 -k "host"
+        elif [[ "${PYTHON_TEST_TARGET}" != "all" ]] && [[ "${PYTHON_TEST_TARGET}" != "lib/host" ]]; then
             python3 -m pytest -v ${test_path} -n auto
         else
             python3 -m pytest -v ${test_path} -n auto -k "not host"
