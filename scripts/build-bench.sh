@@ -21,7 +21,7 @@ INCREMENTAL=false
 
 measure_build() {
   local label="$1"; shift
-  local build_dir="$1"
+  local build_dir="$1"; shift
   local no_clean=false
   local start_time end_time elapsed log_file
 
