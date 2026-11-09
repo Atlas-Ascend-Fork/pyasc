@@ -148,7 +148,7 @@ python3 rmsnorm.py -r NPU -v Ascend910B4
 
 - 统计方式：每个 shape 通过 `msprof op` 采集 `OpBasicInfo.csv` 的 Task Duration。每次运行 warmup=5（预热）+ iters=10（计时）。
 
-- 复现命令：
+- 复现命令（从 `pyasc` 仓库的父目录执行）：
 
   ```bash
   # 编译 Ascend C demo
@@ -158,7 +158,7 @@ python3 rmsnorm.py -r NPU -v Ascend910B4
   # 运行性能测试，输出两份 CSV：
   # summary.csv：每个 shape 的PyAsc、Ascend C、torch_npu 耗时 + py/asc + py/torch 比值
   # pipeline_detail.csv：vec/scalar/mte2/mte3 分项耗时
-  cd pyasc/examples/08_rmsnorm
+  cd ..
   python3 profile_msprof.py --output ./prof_results
   ```
 

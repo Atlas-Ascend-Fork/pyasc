@@ -154,7 +154,7 @@ python3 linear.py -r NPU -v Ascend910B4
   - 输入数据类型：float16。
   - 采集工具：msprof。
 - 统计方式：每个shape通过`msprof op`采集`OpBasicInfo.csv`的Task Duration。每次运行warmup=5（预热）+ iters=10（计时）。
-- 复现命令：
+- 复现命令（从 `pyasc` 仓库的父目录执行）：
 
   ```bash
   # 编译Ascend C演示程序
@@ -162,7 +162,7 @@ python3 linear.py -r NPU -v Ascend910B4
   bash build.sh
 
   # 运行性能测试，生成summary.csv和pipeline_detail.csv
-  cd pyasc/examples/09_linear
+  cd ..
   python3 profile_msprof.py --output ./prof_results/full_run
   ```
 
