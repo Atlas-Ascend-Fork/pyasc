@@ -341,7 +341,7 @@ with torch_npu.profiler.profile(
     experimental_config=experimental_config) as prof:
     steps = 2
     for step in range(steps):
-        vadd_custom(config.Backend.NPU)
+        vadd_custom(config.Backend.NPU, None)
         prof.step()
 
 ```
