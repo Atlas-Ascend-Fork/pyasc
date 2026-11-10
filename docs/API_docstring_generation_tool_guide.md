@@ -22,7 +22,7 @@
 
     ```shell
     pip install .
-    pip install sphinx sphinx-rtd-theme sphinx-autodoc-typehints
+    pip install sphinx sphinx-rtd-theme sphinx-autodoc-typehints myst-parser==4.0.0
     pip install sphinx-markdown-builder
     ```
 
