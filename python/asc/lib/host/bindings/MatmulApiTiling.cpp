@@ -879,7 +879,7 @@ void pyasc_init_matmul_api_tiling(py::module& m)
             },
             "base_m_in"_a = -1, "base_n_in"_a = -1, "base_k_in"_a = -1,
             R"doc(
-          设置A/B/C/Bias是否使能double buffer功能，以及是否需要做ND2NZ或者NZ2ND的转换，主要用于Tiling函数内部调优。
+          设置固定的baseM、baseN、baseK，单位为元素个数。
 
           **对应的Ascend C函数原型**
           
@@ -889,7 +889,9 @@ void pyasc_init_matmul_api_tiling(py::module& m)
 
           **参数说明**
 
-          - dequant_type：设置量化或反量化时的模式。
+          - base_m_in：固定的baseM，默认值为-1，表示由Tiling函数计算。
+          - base_n_in：固定的baseN，默认值为-1，表示由Tiling函数计算。
+          - base_k_in：baseK配置值，默认值为-1，具体取值限制遵循配套CANN版本的SetFixSplit接口约束。
           
           **返回值说明**
           

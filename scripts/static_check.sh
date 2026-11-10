@@ -87,10 +87,20 @@ run_clang_tidy_diff_check() {
     [[ -z "$COMPILE_DB" ]] && log "[WARNING] compile_commands.json not found, using manual flags"
 
     local tidy_output=""
+    local tidy_args=(-p1 -clang-tidy-binary clang-tidy)
+    if [[ -n "${ASCEND_HOME_PATH:-}" && -d "$ASCEND_HOME_PATH/include" ]]; then
+        tidy_args+=("-extra-arg-before=-I${ASCEND_HOME_PATH}/include")
+    fi
+    local python_include_dirs include_dir
+    if python_include_dirs=$(python3 -c 'import pybind11, sysconfig; print(sysconfig.get_path("include")); print(pybind11.get_include())' 2>/dev/null); then
+        while IFS= read -r include_dir; do
+            tidy_args+=("-extra-arg-before=-I${include_dir}")
+        done <<< "$python_include_dirs"
+    fi
     if [[ -n "$COMPILE_DB" ]]; then
-        tidy_output=$(git diff -U0 "$BASE_BRANCH" HEAD | clang-tidy-diff -p1 -clang-tidy-binary clang-tidy -path "$(dirname "$COMPILE_DB")" 2>&1) || true
+        tidy_output=$(git diff -U0 "$BASE_BRANCH" HEAD | clang-tidy-diff "${tidy_args[@]}" -path "$(dirname "$COMPILE_DB")" 2>&1) || true
     else
-        local tidy_args=(-p1 -clang-tidy-binary clang-tidy -extra-arg-before="-x" -extra-arg-before="c++")
+        tidy_args+=(-extra-arg-before="-x" -extra-arg-before="c++")
         for flag in $MANUAL_COMPILE_FLAGS; do
             tidy_args+=(-extra-arg-before="$flag")
         done
