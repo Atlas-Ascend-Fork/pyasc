@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2025 Huawei Technologies Co., Ltd.
+# Copyright (c) 2025-2026 Huawei Technologies Co., Ltd.
 # This program is free software, you can redistribute it and/or modify it under the terms and conditions of
 # CANN Open Software License Agreement Version 2.0 (the "License").
 # Please refer to the License for details. You may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ NEED_PYTHON_TEST="false"
 
 # 测试跳过白名单配置
 # 匹配以下类型的文件修改时不触发测试：
-# - 文档类：docs/, *.md, *.txt, *.rst
+# - 文档类：docs/, *.md, *.txt（CMakeLists.txt 除外）, *.rst
 # - 配置类：.github/, .gitignore, .clang-format, .gitattributes
 # - 其他：LICENSE, README, CHANGELOG, images/, assets/
 NO_TEST_WHITELIST=(
@@ -103,6 +103,12 @@ function log() {
 #       1 - 不在白名单中（继续分析）
 function is_in_whitelist() {
     local file="$1"
+
+    # CMake 构建文件需要继续分析测试范围。
+    if [[ "${file##*/}" == "CMakeLists.txt" ]]; then
+        return 1
+    fi
+
     for pattern in "${NO_TEST_WHITELIST[@]}"; do
         if [[ "$file" == ${pattern}* ]] || [[ "$file" == ${pattern} ]]; then
             return 0
@@ -114,7 +120,7 @@ function is_in_whitelist() {
 # 分析PR文件列表，决定测试触发策略
 #
 # 分析流程：
-# 1. 白名单检查：匹配白名单模式的文件跳过
+# 1. 白名单检查：CMakeLists.txt 继续分析，其余匹配白名单模式的文件跳过
 # 2. 全量触发检查：匹配FULL_TEST_PATHS的文件触发全量测试
 # 3. 精准匹配检查：
 #    - C++：lib/Target/AscendC/{模块}/ 匹配到KNOWN_CPP_MODULES
