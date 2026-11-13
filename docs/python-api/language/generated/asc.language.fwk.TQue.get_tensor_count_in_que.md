@@ -26,8 +26,8 @@ Que中已入队的Tensor数量。
 
 ```python
 # 通过get_tensor_count_in_que查询que中已入队的Tensor数量，当前通过alloc_tensor接口分配了内存，并加入que中，num为1。
-pipe = asc.Tpipe()
-que = asc.TQue(asc.TPosition.VECOUT 4)
+pipe = asc.TPipe()
+que = asc.TQue(asc.TPosition.VECOUT, 4)
 num = 4
 len = 1024
 pipe.init_buffer(que=que, num=num, len=len)
