@@ -187,7 +187,7 @@ stages:
         if: env.TARGET_BRANCH == 'master'
         runs-on: ['self-hosted','npu=2','smoke=204']
         container:
-          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_arm:pre_mindspore_A2_conda_v1.1037
+          image: swr.cn-south-1.myhuaweicloud.com/pre_smoke/ubuntu24.04_arm:pre_mindspore_A2_conda_v1.1055
     pre:
     - type: auto
     fail-fast: true
