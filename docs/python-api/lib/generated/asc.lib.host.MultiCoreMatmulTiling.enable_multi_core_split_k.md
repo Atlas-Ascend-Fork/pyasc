@@ -34,7 +34,7 @@ tiling.set_shape(1024, 1024, 1024)
 tiling.set_org_shape(1024, 1024, 1024)
 tiling.set_bias(True)
 tiling.set_buffer_space(-1, -1, -1)
-tiling.enable_multi_core_split_k(true);  // 使能切K轴
+tiling.enable_multi_core_split_k(True)  # 使能切K轴
 tiling_data = host.TCubeTiling()
 ret = tiling.get_tiling(tiling_data)
 ```
