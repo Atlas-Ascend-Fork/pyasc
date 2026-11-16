@@ -1,6 +1,6 @@
 # 贡献指南
 
-本项目欢迎广大开发者体验并参与贡献。在参与社区贡献之前，请参阅 [cann-community](https://gitcode.com/cann/community) 了解行为准则，完成 CLA 协议签署，并熟悉源码仓库的贡献流程。
+本项目欢迎广大开发者体验并参与贡献。在参与社区贡献之前，请参阅 [cann-community](https://gitcode.com/cann/community) 了解行为准则，完成 CLA 协议签署，并熟悉源码仓库的贡献流程。除本指南所列贡献流程外，您还可以通过社区的 [基础贡献](https://gitcode.com/cann/community#基础贡献)（参与社区会议、邮件讨论、提交 Issue/PR 等）或 [进阶贡献](https://gitcode.com/cann/community#进阶贡献)（新建 SIG / 成为核心贡献者、组织会议、新建仓库及 CI 配置等）深度参与 CANN 社区建设。
 
 ---
 
