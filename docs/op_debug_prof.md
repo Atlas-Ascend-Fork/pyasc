@@ -121,7 +121,7 @@ msprof op工具包含msprof op（上板）和msprof op simulator（仿真）两�
 
 本文以add算子为例，介绍如何在上板和仿真两种场景中使用msprof op算子性能调优工具。
 
-add算子实现代码参考[02_add_framework.py](../examples/02_add_framework/add_framework.py),
+add算子实现代码参考[add_framework.py](../examples/02_add_framework/add_framework.py)。
 
 #### 上板性能数据采集
 
