@@ -90,7 +90,7 @@ def check_type_5hd(callee: str, dst_or_list, src_or_list) -> None:
             return
 
         if len(dst_or_list) != len(src_or_list):
-            raise ValueError("For {callee}, dst_list and src_list must have the same length.")
+            raise ValueError(f"For {callee}, dst_list and src_list must have the same length.")
 
         if isinstance(dst_or_list[0], LocalTensor):
             first_dtype = dst_or_list[0].dtype
