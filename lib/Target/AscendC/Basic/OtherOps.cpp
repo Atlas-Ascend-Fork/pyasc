@@ -151,7 +151,7 @@ LogicalResult mlir::ascendc::printOperation(CodeEmitter& emitter, ascendc::Const
     SmallVector<Type> types;
     if (auto typesAttr = op.getTypesAttr()) {
         if (typesAttr.size() != op->getNumOperands()) {
-            return emitError(op.getLoc(), "Expect the size of typesAttr equals to numbers of operands");
+            return emitError(op.getLoc(), "Expect the size of typesAttr to equal numbers of operands");
         }
         llvm::transform(typesAttr, std::back_inserter(types), [](Attribute a) { return cast<TypeAttr>(a).getValue(); });
     } else {

@@ -11,6 +11,8 @@
 #ifndef ASCIR_DIALECT_ASC_IR_ASC_FUNC_TRAIT_H
 #define ASCIR_DIALECT_ASC_IR_ASC_FUNC_TRAIT_H
 
+#include "mlir/IR/OpDefinition.h"
+
 namespace mlir {
 namespace OpTrait {
 template <typename ConcreteOp>
@@ -29,7 +31,7 @@ struct AscMemberFuncTrait : public TraitBase<ConcreteOp, AscMemberFuncTrait> {
     static mlir::LogicalResult verifyTrait(Operation* op)
     {
         if (op->getNumOperands() < 1 || op->getNumResults() > 1) {
-            return op->emitError("AscMemberFuncTrait must have more than one inputs and less than one return value");
+            return op->emitError("AscMemberFuncTrait must have more than one input and less than one return value");
         }
         return success();
     }
@@ -40,7 +42,7 @@ struct AscFuncTrait : public TraitBase<ConcreteOp, AscFuncTrait> {
     static mlir::LogicalResult verifyTrait(Operation* op)
     {
         if (op->getNumResults() > 1) {
-            return op->emitError("AscFunc trait only support less than one return value");
+            return op->emitError("AscFunc trait only supports less than one return value");
         }
         return success();
     }
