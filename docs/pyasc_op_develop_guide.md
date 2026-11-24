@@ -58,7 +58,6 @@
   <tr><td align="center">x</td><td align="center">(8, 2048)</td><td align="center">float</td><td align="center">ND</td></tr>
   <tr><td align="center">y</td><td align="center">(8, 2048)</td><td align="center">float</td><td align="center">ND</td></tr>
   <tr><td rowspan="1" align="center">算子输出</td><td align="center">z</td><td align="center">(8, 2048)</td><td align="center">float</td><td align="center">ND</td></tr>
-  </tr>
   <tr><td rowspan="1" align="center">核函数名</td><td colspan="5" align="center">vadd_kernel</td></tr>
   <tr><td rowspan="4" align="center">使用的主要接口</td><td colspan="5" align="center">asc.data_copy：数据搬运接口</td></tr>
   <tr><td colspan="5" align="center">asc.add：矢量基础算术接口</td></tr>
