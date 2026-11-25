@@ -30,7 +30,7 @@
 | print_ir_before_all | bool | False | 在每个编译 Pass 前打印 IR，用于排查 Pass 问题。 |
 | run_passes | bool | True | 在翻译为 Ascend C 前运行 lowering / 优化 / 后处理 Pass。 |
 | kernel_type | KernelType \| None | None | 核类型。为 `None` 时由框架根据 IR 自动推导。取值见 [`KernelType`](config.md#kerneltype)。 |
-| opt_level | int | 3 | 毕昇优化级别，合法值为 `1`、`2`、`3`。 |
+| opt_level | int | 3 | 毕昇优化级别，合法值为 `0`、`1`、`2`、`3`。 |
 | auto_sync | bool \| None | True | 是否开启毕昇 `--cce-auto-sync` 自动插入同步。 |
 | auto_sync_log | str \| None | `""` | 保存自动同步插入信息的文件路径。`None` 或空字符串表示不落盘。 |
 | bisheng_options | tuple[str, ...] \| None | None | 额外追加到毕昇编译命令的参数。 |
@@ -41,7 +41,7 @@
 
 **约束说明**
 
-- `opt_level` 必须为 1、2 或 3，否则编译器初始化失败。
+- `opt_level` 必须为整数 `0`、`1`、`2` 或 `3`；`0` 对应 `-O0`，关闭毕昇编译器优化，适用于调试和性能分析。
 - `kernel_type` 若显式指定，必须是 [`KernelType`](config.md#kerneltype) 枚举值。
 - `vf_vec_len` 仅在 C310（Ascend950PR 系列）上有效；C220 上传入会报错。C310 未指定时默认 256。
 
