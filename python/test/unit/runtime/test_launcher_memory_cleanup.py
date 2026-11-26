@@ -23,6 +23,7 @@ def test_launch_releases_h2d_allocations_for_success_and_runtime_errors(failure_
     released = []
     copied_from_device = []
     synchronize_calls = []
+    stream = object()
     pointers = iter((0x1000, 0x2000))
 
     def allocate_on_device(_source, _nbytes):
@@ -34,8 +35,8 @@ def test_launch_releases_h2d_allocations_for_success_and_runtime_errors(failure_
         if failure_point == "launch":
             raise RuntimeError("launch failed")
 
-    def synchronize(*_args, **_kwargs):
-        synchronize_calls.append(True)
+    def synchronize(selected_stream):
+        synchronize_calls.append(selected_stream)
         if failure_point == "synchronize":
             raise RuntimeError("synchronize failed")
 
@@ -51,7 +52,7 @@ def test_launch_releases_h2d_allocations_for_success_and_runtime_errors(failure_
             patch.object(runtime, "free", side_effect=lambda handle: released.append(handle.value)), \
             patch.object(runtime, "launch_kernel", side_effect=launch), \
             patch.object(runtime, "synchronize", side_effect=synchronize):
-        runner = Launcher(LaunchOptions(core_num=1, stream=object()))
+        runner = Launcher(LaunchOptions(core_num=1, stream=stream))
         if failure_point is None:
             runner.launch_kernel(object(), handles, enable_debug=False, func_name="test_kernel")
         else:
@@ -60,5 +61,5 @@ def test_launch_releases_h2d_allocations_for_success_and_runtime_errors(failure_
 
     assert allocated == [0x1000, 0x2000]
     assert released == allocated
-    assert len(synchronize_calls) == (0 if failure_point == "launch" else 1)
+    assert synchronize_calls == ([] if failure_point == "launch" else [stream])
     assert copied_from_device == (allocated if failure_point is None else [])

@@ -219,7 +219,7 @@ class Launcher:
             core_num = self.options.core_num or self.get_core_num()
             stream = self.options.stream or rt.current_stream()
             rt.launch_kernel(function, core_num, inputs, stream_handle=stream)
-            rt.synchronize()
+            rt.synchronize(stream)
             for index, arg in enumerate(memory_args):
                 if enable_debug and index == len(memory_args) - 1:
                     rt.call_print_interface(inputs[-1], utils.TOTAL_DUMP_SIZE, stream, func_name)
