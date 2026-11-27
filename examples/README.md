@@ -41,8 +41,8 @@
 ### 通用运行命令
 
 ```bash
-cd pyasc/examples/<示例目录>
-python3 <示例文件>.py -r [RUN_MODE] -v [SOC_VERSION]
+cd pyasc
+python3 examples/<示例目录>/<示例文件>.py -r [RUN_MODE] -v [SOC_VERSION]
 ```
 
 - `RUN_MODE`：`Model`（仿真器，无需 NPU）或 `NPU`（上板运行）
