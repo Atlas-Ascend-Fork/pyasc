@@ -705,10 +705,21 @@ function build_test() {
 }
 
 
+require_option_value() {
+    local opt="$1"
+    local argc="$2"
+    local val="${3:-}"
+    if [[ "${argc}" -lt 2 || -z "${val}" || "${val}" == -* ]]; then
+        log "Error: Option ${opt} requires a non-empty value"
+        exit 1
+    fi
+}
+
 TEST="all"
 while [[ $# -gt 0 ]]; do
     case $1 in
     -f|--filelist)
+        require_option_value "$1" "$#" "${2:-}"
         PR_FILELIST="$2"
         shift 2
         ;;
@@ -721,10 +732,12 @@ while [[ $# -gt 0 ]]; do
         shift
         ;;
     --llvm_install_path)
+        require_option_value "$1" "$#" "${2:-}"
         LLVM_INSTALL_PATH="$2"
         shift 2
         ;;
     --lit_install_path)
+        require_option_value "$1" "$#" "${2:-}"
         LIT_INSTALL_PATH="$2"
         shift 2
         ;;
