@@ -47,6 +47,6 @@ add_dependencies(${TARGET_NAME}
 
 function(add_ascir_extension EXT_TARGET_NAME)
   set_target_properties(${EXT_TARGET_NAME} PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
-  target_include_directories(${EXT_TARGET_NAME} PRIVATE ${pybind11_INCLUDE_DIRS})
+  target_include_directories(${EXT_TARGET_NAME} SYSTEM PRIVATE ${pybind11_INCLUDE_DIRS})
   target_link_libraries(${ASCIR_PY_MODULE_TARGET} PRIVATE ${EXT_TARGET_NAME})
 endfunction()

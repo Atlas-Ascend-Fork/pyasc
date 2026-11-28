@@ -11,4 +11,5 @@ add_mlir_dialect_library(AscTileAscendCUtils
 
   LINK_LIBS PUBLIC
   MLIRAsc
+  AscVF2Dialect
 )

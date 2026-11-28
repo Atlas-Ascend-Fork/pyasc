@@ -14,10 +14,10 @@
 // CHECK:     %4 = ascendc.local_tensor.get_phy_addr_v2 %2 : !ascendc.local_tensor<256xf32>, memref<256xf32, 26>
 // CHECK:     %5 = ascendc.local_tensor.get_phy_addr_v2 %0 : !ascendc.local_tensor<256xf32>, memref<256xf32, 26>
 // CHECK:     emitasc.vec_scope {
-// CHECK:       %[[REG0:[0-9]+]] = ascendc.reg_tensor : <f32>
-// CHECK:       %[[REG1:[0-9]+]] = ascendc.reg_tensor : <f32>
-// CHECK:       %[[REG2:[0-9]+]] = ascendc.reg_tensor : <f32>
-// CHECK:       %[[REG3:[0-9]+]] = ascendc.reg_tensor : <f32>
+// CHECK:       %{{.+}} = ascendc.reg_tensor : <f32>
+// CHECK:       %{{.+}} = ascendc.reg_tensor : <f32>
+// CHECK:       %{{.+}} = ascendc.reg_tensor : <f32>
+// CHECK:       %{{.+}} = ascendc.reg_tensor : <f32>
 // CHECK:       %[[VEC_LEN:[0-9]+]] = ascendc.get_vec_len : index
 // CHECK:       %[[ONE_REPEAT_SIZE:[0-9]+]] = arith.divsi %[[VEC_LEN]], %c4 : index
 // CHECK:       %[[COUNT:[0-9]+]] = emitasc.variable %c256 : index, memref<1xui32>
@@ -28,11 +28,11 @@
 // CHECK:         %[[OFFSET:[0-9]+]] = arith.muli %arg3, %[[ONE_REPEAT_SIZE]] : index
 // CHECK:         %[[UPDATE_MASK:[0-9]+]] = ascendc.update_mask f32, %[[COUNT]] : memref<1xui32>
 // CHECK:         %[[ADDR0:[0-9]+]] = emitasc.ptr_offset %3[%[[OFFSET]]] : memref<256xf32, 26>, memref<256xf32, 26>
-// CHECK:         ascendc.data_copy_vld_reg %[[REG0]], %[[ADDR0]] {dist = 0 : i32} : !ascendc.reg_tensor<f32>, memref<256xf32, 26>
+// CHECK:         ascendc.data_copy_vld_reg %[[REG0:[0-9]+]], %[[ADDR0]] {dist = 0 : i32} : !ascendc.reg_tensor<f32>, memref<256xf32, 26>
 // CHECK:         %[[ADDR1:[0-9]+]] = emitasc.ptr_offset %4[%[[OFFSET]]] : memref<256xf32, 26>, memref<256xf32, 26>
-// CHECK:         ascendc.data_copy_vld_reg %[[REG1]], %[[ADDR1]] {dist = 0 : i32} : !ascendc.reg_tensor<f32>, memref<256xf32, 26>
-// CHECK:         ascendc.add_reg %[[REG2]], %[[REG0]], %[[REG1]], %[[MASK_ALL]] : !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
-// CHECK:         ascendc.mul_reg %[[REG3]], %[[REG2]], %[[REG1]], %[[MASK_ALL]] : !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
+// CHECK:         ascendc.data_copy_vld_reg %[[REG1:[0-9]+]], %[[ADDR1]] {dist = 0 : i32} : !ascendc.reg_tensor<f32>, memref<256xf32, 26>
+// CHECK:         ascendc.add_reg %[[REG2:[0-9]+]], %[[REG0]], %[[REG1]], %[[MASK_ALL]] : !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
+// CHECK:         ascendc.mul_reg %[[REG3:[0-9]+]], %[[REG2]], %[[REG1]], %[[MASK_ALL]] : !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
 // CHECK:         %[[ADDR2:[0-9]+]] = emitasc.ptr_offset %5[%[[OFFSET]]] : memref<256xf32, 26>, memref<256xf32, 26>
 // CHECK:         ascendc.data_copy_vst_reg %[[ADDR2]], %[[REG3]], %[[UPDATE_MASK]] {dist = 16 : i32} : memref<256xf32, 26>, !ascendc.reg_tensor<f32>, !ascendc.mask_reg
 // CHECK:       }

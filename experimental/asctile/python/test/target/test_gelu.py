@@ -15,7 +15,7 @@ import torch
 from .helpers import parametrize_is_static
 
 
-@asctile.jit(reuse_alloc=1)
+@asctile.jit(reuse_alloc=2)
 def gelu(input_ptr: asctile.GlobalAddress, output_ptr: asctile.GlobalAddress, input_length,
          tile_length: asctile.ConstExpr, TANH_APPROX_FACTOR: asctile.ConstExpr,
          NEG_SQRT_EIGHT_OVER_PI: asctile.ConstExpr, unroll_factor: asctile.ConstExpr, l2_cache: asctile.ConstExpr):
@@ -52,13 +52,13 @@ def gelu_torch(x: torch.Tensor, TANH_APPROX_FACTOR, NEG_SQRT_EIGHT_OVER_PI):
 
 # yapf: disable
 @parametrize_is_static()
-@pytest.mark.parametrize("test_name, block_num, input_shapes, input_dtypes, output_shapes, output_dtypes, compile_params, runtime_params, tiling_key, tiling_params", [
+@pytest.mark.parametrize("block_num, input_shapes, input_dtypes, output_shapes, output_dtypes, compile_params, runtime_params, tiling_key, tiling_params", [
 # PYASC_TESTS_BEGIN
-    ("gelu_test_1", 72, ([32, 2048, 2304], ), (torch.float32, ), ([32, 2048, 2304], ), (torch.float32, ), ((False, True), ), (2, ), 7, (150994944, 72, 15872)),
+    pytest.param(72, ([32, 2048, 2304], ), (torch.float32, ), ([32, 2048, 2304], ), (torch.float32, ), ((False, True), ), (2, ), 7, (150994944, 72, 15872), id="gelu_test_1"),
 # PYASC_TESTS_END
 ])
 # yapf: enable
-def test_gelu(profiler, runs, is_static, test_name, block_num, input_shapes, input_dtypes, output_shapes, output_dtypes,
+def test_gelu(profiler, runs, is_static, block_num, input_shapes, input_dtypes, output_shapes, output_dtypes,
               compile_params, runtime_params, tiling_key, tiling_params):
     input_shape = input_shapes[0]
     dtype = input_dtypes[0]

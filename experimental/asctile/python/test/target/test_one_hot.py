@@ -15,7 +15,7 @@ import torch
 from .helpers import parametrize_is_static
 
 
-@asctile.jit(reuse_alloc=1)
+@asctile.jit(reuse_alloc=2)
 def one_hot(input_ptr: asctile.GlobalAddress, output_ptr: asctile.GlobalAddress, arange_ptr: asctile.GlobalAddress,
             on_value: asctile.ConstExpr, off_value: asctile.ConstExpr, input_total, depth: asctile.ConstExpr,
             unroll_factor: asctile.ConstExpr):

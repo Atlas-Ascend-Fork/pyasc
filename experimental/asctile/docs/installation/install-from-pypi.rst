@@ -37,4 +37,6 @@ Run the following command to download and install (or update) a pre-built Python
     python3 -m pip install --pre --upgrade pyasc-dev
 
 
+New versions of the package are deployed **daily**. The release history is available on `the project page <https://pypi.org/project/pyasc-dev/#history>`__.
+
 After the installation, it is recommended to :doc:`setup runtime environment <setup-runtime-env>` in order to run PyAsc operators.

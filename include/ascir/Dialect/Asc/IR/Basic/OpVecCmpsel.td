@@ -21,7 +21,7 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/OpBase.td"
 
 def AscendC_CompareL0Op : VectorOp<"compare_l0", "Compare", [
-  AscFunc, OpWithDstInterface, OpWithSrcInterface, OpWithReusableSrcInterface
+  AscFunc, OpWithDstInterface, OpWithSrcInterface
 ]> {
     let description = "`AscendC::Compare` is a vector binary operation (L0 API).\n";
     let arguments = (ins AnyType:$dst, AnyType:$src0, AnyType:$src1, AscendC_CMPMODEAttr:$cmpMode,
@@ -41,7 +41,7 @@ def AscendC_CompareL1Op : VectorOp<"compare_l1", "Compare", [OpWithDstInterface]
 }
 
 def AscendC_CompareL2Op : VectorOp<"compare_l2", "Compare", [
-  AscFunc, OpWithDstInterface, OpWithSrcInterface, OpWithReusableSrcInterface
+  AscFunc, OpWithDstInterface, OpWithSrcInterface
 ]> {
     let description = "`AscendC::Compare` is a vector binary operation (L2 API).\n";
     let arguments = (ins AnyType:$dst, AnyType:$src0, AnyType:$src1, AscendC_CMPMODEAttr:$cmpMode,
@@ -66,7 +66,7 @@ def AscendC_CompareRL1Op : VectorOp<"compare_r_l1", "Compare"> {
 }
 
 def AscendC_CompareScalarL0Op : VectorOp<"compare_scalar_l0", "CompareScalar", [
-  AscFunc, OpWithDstInterface, OpWithSrcInterface, OpWithReusableSrcInterface
+  AscFunc, OpWithDstInterface, OpWithSrcInterface
 ]> {
     let description = "`AscendC::CompareScalar` is a vector-scalar binary operation (L0 API).\n";
     let arguments = (ins AnyType:$dst, AnyType:$src0, AnyType:$src1Scalar, AscendC_CMPMODEAttr:$cmpMode,
@@ -87,7 +87,7 @@ def AscendC_CompareScalarL1Op : VectorOp<"compare_scalar_l1", "CompareScalar", [
 }
 
 def AscendC_CompareScalarL2Op : VectorOp<"compare_scalar_l2", "CompareScalar", [
-  AscFunc, OpWithDstInterface, OpWithSrcInterface, OpWithReusableSrcInterface
+  AscFunc, OpWithDstInterface, OpWithSrcInterface
 ]> {
     let description = "`AscendC::CompareScalar` is a vector-scalar binary operation (L2 API).\n";
     let arguments = (ins AnyType:$dst, AnyType:$src0, AnyType:$src1Scalar, AscendC_CMPMODEAttr:$cmpMode,
@@ -109,7 +109,7 @@ def AscendC_SetCmpMaskOp : VectorOp<"set_cmp_mask", "SetCmpMask", [AscFunc]> {
 }
 
 def AscendC_SelectScalarL2Op : VectorOp<"select_scalar_l2", "Select", [
-  AscFunc, OpWithDstInterface, OpWithSrcInterface, OpWithReusableSrcInterface
+  AscFunc, OpWithDstInterface, OpWithSrcInterface
 ]> {
     let description = "Select elements from source tensor and a scalar (L2 API)";
     let arguments = (ins AscendC_LocalTensor:$dst, AscendC_LocalTensor:$selMask,
@@ -124,7 +124,7 @@ def AscendC_SelectScalarL2Op : VectorOp<"select_scalar_l2", "Select", [
 }
 
 def AscendC_SelectL2Op : VectorOp<"select_l2", "Select", [
-  AscFunc, OpWithDstInterface, OpWithSrcInterface, OpWithReusableSrcInterface
+  AscFunc, OpWithDstInterface, OpWithSrcInterface
 ]> {
     let description = "Select elements from two source tensors (L2 API)";
     let arguments = (ins AscendC_LocalTensor:$dst, AscendC_LocalTensor:$selMask,
@@ -148,7 +148,7 @@ def AscendC_SelectScalarL1Op : VectorOp<"select_scalar_l1", "Select", [OpWithDst
 }
 
 def AscendC_SelectScalarL0Op : VectorOp<"select_scalar_l0", "Select", [
-  AscFunc, OpWithDstInterface, OpWithSrcInterface, OpWithReusableSrcInterface
+  AscFunc, OpWithDstInterface, OpWithSrcInterface
 ]> {
     let description = "Select elements from source tensor and a scalar (L0 API)";
     let arguments = (ins AscendC_LocalTensor:$dst, AscendC_LocalTensor:$selMask,
@@ -182,7 +182,7 @@ def AscendC_SelectL1Op : VectorOp<"select_l1", "Select", [OpWithDstInterface]> {
 }
 
 def AscendC_SelectL0Op : VectorOp<"select_l0", "Select", [
-  AscFunc, OpWithDstInterface, OpWithSrcInterface, OpWithReusableSrcInterface
+  AscFunc, OpWithDstInterface, OpWithSrcInterface
 ]> {
     let description = "Select elements from two source tensors (L0 API)";
     let arguments = (ins AscendC_LocalTensor:$dst, AscendC_LocalTensor:$selMask,

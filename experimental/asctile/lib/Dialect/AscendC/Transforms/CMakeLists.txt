@@ -33,6 +33,7 @@ add_mlir_dialect_library(AscTileAscendCTransforms
 
   DEPENDS
   AscTileAscendCPassIncGen
+  AscTileAscendCInterfacesIncGen
 
   LINK_LIBS PUBLIC
   MLIRFuncDialect
@@ -41,5 +42,6 @@ add_mlir_dialect_library(AscTileAscendCTransforms
   MLIRAsc
   MLIRAscTransforms
   MLIRAscUtils
+  AscTileAscendCDialect
   AscTileAscendCUtils
 )

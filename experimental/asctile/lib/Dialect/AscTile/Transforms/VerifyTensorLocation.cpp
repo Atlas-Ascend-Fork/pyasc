@@ -12,6 +12,7 @@
 #include "asctile/Dialect/AscTile/Transforms/Passes.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
@@ -109,6 +110,13 @@ void VerifyTensorLocationPass::runOnOperation()
         if (!type)
             return;
         if (badLoc(op, type, "tensor", {TL::L1, TL::UB}))
+            signalPassFailure();
+    });
+    funcOp.walk([this](tensor::ConcatOp op) {
+        auto result = dyn_cast<LocalTensorType>(op.getType());
+        if (!result)
+            return;
+        if (badLoc(op, result, "result", {TL::UB, TL::L0C}))
             signalPassFailure();
     });
 }

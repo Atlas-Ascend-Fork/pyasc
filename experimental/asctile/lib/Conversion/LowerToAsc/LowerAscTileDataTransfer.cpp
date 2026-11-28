@@ -940,6 +940,48 @@ Value buildLoadData2DV2Params(
         .create(builder, loc);
 }
 
+struct ConvertCopyUBToUB : ConvertOp<asctile::CopyOp> {
+    using ConvertOp::ConvertOp;
+    using ConvertOp::createTensorOp;
+
+    LogicalResult matchAndRewrite(asctile::CopyOp op, ConvertRewriter& rewriter) const override
+    {
+        auto opType = op.getType();
+        if (opType.getLoc() != asctile::TensorLocation::UB)
+            return failure();
+        auto baseType = op.getBase().getType();
+        if (baseType.getLoc() != asctile::TensorLocation::UB)
+            return failure();
+        auto loc = op.getLoc();
+        Value src = rewriter.getRemappedValue(op.getBase());
+        auto srcType = cast<ascendc::BaseTensorType>(src.getType());
+        Value dst = createTensorOp(rewriter, loc, opType).getResult();
+        Value linearOffset = linearizeOffset(rewriter, loc, getStaticShape(rewriter, srcType), op.getOffsets());
+        src = rewriter.create<ascendc::LocalTensorSubIndexOp>(loc, srcType, src, linearOffset);
+        ascir::ConstantOpBuilder consts(rewriter);
+        auto dstType = cast<ascendc::BaseTensorType>(dst.getType());
+        SmallVector<int64_t> srcShape{srcType.getShape()};
+        SmallVector<int64_t> dstShape{dstType.getShape()};
+        int64_t colCount = dstShape.back();
+        int64_t rowCount = calCount(dst) / colCount;
+        if (dstShape.size() == 1 || srcShape.back() == colCount) {
+            auto copyOp = rewriter.create<ascendc::DataCopyL2Op>(loc, dst, src, consts.i32(rowCount * colCount));
+            copyOp.setDirection(ascendc::TPosition::VECCALC, ascendc::TPosition::VECCALC);
+        } else {
+            int64_t elemSize = ascendc::getElementTypeSize(dstType);
+            int64_t blockLen = llvm::divideCeilSigned(colCount * elemSize, ascendc::ubBlockSize);
+            int64_t srcStride = llvm::divideCeilSigned(srcShape.back() * elemSize, ascendc::ubBlockSize) - blockLen;
+            auto dataCopyParams = rewriter.create<ascendc::ConstructOp>(
+                loc, rewriter.getType<ascendc::DataCopyParamsType>(),
+                ValueRange{consts.i32(rowCount), consts.i32(blockLen), consts.i32(srcStride), consts.i32(0)});
+            auto copyOp = rewriter.create<ascendc::DataCopyL2Op>(loc, dst, src, dataCopyParams);
+            copyOp.setDirection(ascendc::TPosition::VECCALC, ascendc::TPosition::VECCALC);
+        }
+        rewriter.replaceOp(op, dst);
+        return success();
+    }
+};
+
 struct ConvertCopyUBToL1 : ConvertOp<asctile::CopyOp> {
     using ConvertOp::ConvertOp;
     using ConvertOp::createTensorOp;
@@ -1487,8 +1529,9 @@ struct LowerAscTileDataTransferPass
         patterns.insert<
             //
             ConvertLoadToUB, ConvertLoadToUBWithTranspose, ConvertLoadToL1, ConvertStore, ConvertStoreFixpipe,
-            ConvertCopyL1ToL0, ConvertCopyUBToL1, ConvertCopyL1ToBT, ConvertGetValue, ConvertSetValue,
-            ConvertCopyFixpipe, ConvertStoreWithTranspose, ConvertGather, ConvertScatter, ConvertReindex
+            ConvertCopyL1ToL0, ConvertCopyUBToUB, ConvertCopyUBToL1, ConvertCopyL1ToBT, ConvertGetValue,
+            ConvertSetValue, ConvertCopyFixpipe, ConvertStoreWithTranspose, ConvertGather, ConvertScatter,
+            ConvertReindex
             //
             >(converter, context);
         auto op = getOperation();

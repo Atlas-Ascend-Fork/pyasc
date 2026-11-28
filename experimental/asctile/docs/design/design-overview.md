@@ -10,6 +10,8 @@ See LICENSE in the root of the software repository for the full text of the Lice
 
 # Design overview
 
+> Published in March 2026, last updated in November 2026.
+
 ```{contents} Table of Contents
 :local:
 ```
@@ -26,10 +28,10 @@ See LICENSE in the root of the software repository for the full text of the Lice
 - Support Ascend **A2/A3** (910B/910C platforms, C220 arch), and **A5** (950 platforms, C310 arch) hardware families.
 
 **Relationship to PyAsc1 (`asc`):**
-AscTile is implemented *on top of* the existing PyAsc infrastructure. The `asctile.jit` decorator re-uses `JITFunction`, the same AST-to-IR codegen, the same MLIR pass manager, and the same Bisheng compilation step. What is new is the `asctile` MLIR dialect and a dedicated lowering pipeline that converts tile-level IR down to the `ascendc` dialect before the existing backend takes over.
+AscTile is implemented *on top of* the existing PyAsc infrastructure. `asctile.jit` uses a `JITFunction` subclass, a `FunctionVisitor` subclass, and a `Compiler` subclass; it reuses the base argument specialization, cache, launch, Ascend C emitter, and Bisheng compilation flow. The additions are the `asctile`, `ascvf`, and `ascvf2` MLIR dialects plus a dedicated pipeline that lowers tile-level IR to the `ascendc` dialect.
 
 **Out of scope:**
-- Direct access to Ascend C intrinsics (use `asc` for that).
+- General-purpose, one-to-one access to the full Ascend C API. Limited interop with `asc` values and explicit code fragments is intentionally available as an escape hatch (`to_asc`, `from_asc`, `inline`, and `inline_vf`).
 - Dynamic shapes at IR level — tile shapes must be statically known at JIT time; tensor shapes may be dynamic (runtime values).
 
 ---
@@ -82,173 +84,178 @@ A5 adds the following hardware capabilities relative to A2: <sup>[[58]](#ref-58)
 
 ## 3. Architecture Overview
 
+```text
+User Python code (@asctile.jit)
+    │
+    ▼
+AscTile Python frontend
+    experimental/asctile/python/asctile/language/
+    experimental/asctile/python/asctile/runtime/
+    │  GlobalTensor, LocalTensor, TensorLocation, range
+    │  memory, arithmetic, reduction, shape, atomics, debug APIs
+    │
+    ▼
+AST → MLIR
+    FunctionVisitor (subclass of asc's Python AST visitor)
+    pybind11 builders in experimental/asctile/python/src/OpBuilder.cpp
+    │
+    ▼
+asctile MLIR dialect
+    experimental/asctile/include/asctile/Dialect/AscTile/IR/
+    experimental/asctile/lib/Dialect/AscTile/IR/
+    │  tensor<..., #asctile.global>
+    │  tensor<..., #asctile.local<LOCATION>>
+    │  tile operations, matmul, reductions, regions, CV groups
+    │
+    ▼
+Tile-level transforms and optional register fusion
+    experimental/asctile/lib/Dialect/AscTile/Transforms/
+    experimental/asctile/lib/Dialect/AscVF/Transforms/  (vf_fusion=1)
+    experimental/asctile/lib/Dialect/AscVF2/Transforms/ (vf_fusion=2)
+    │
+    ▼
+LowerToAsc conversion
+    experimental/asctile/lib/Conversion/LowerToAsc/
+    │  asctile + arith/math/scf/tensor → ascendc-compatible IR
+    │
+    ▼
+ascendc MLIR dialect
+    shared backend dialect plus extension passes in
+    lib/Dialect/Asc/Transforms/ and
+    experimental/asctile/lib/Dialect/AscendC/Transforms/
+    │  allocation, reuse, CV placement, synchronization, boilerplate
+    │
+    ▼
+Ascend C source
+    lib/Target/AscendC/CodeEmitter.cpp
+    │
+    ▼
+Bisheng compiler
+    │
+    ▼
+NPU kernel object and runtime launch
 ```
-  ┌──────────────────────────────────────────────────────────┐
-  │                 User Python Code                         │
-  │             @asctile.jit                                 │
-  └──────────────────────┬───────────────────────────────────┘
-                         │
-  ┌──────────────────────▼───────────────────────────────────┐
-  │              AscTile Frontend  (python/asctile/)          │
-  │                                                          │
-  │  GlobalTensor (GM)  LocalTensor (UB/L0/…)  asctile.range │
-  │  copy_in / copy_out  arithmetic  reductions  shape ops   │
-  │  atomics  matmul  unary  creation  indexing              │
-  └──────────────────────┬───────────────────────────────────┘
-                         │  FunctionVisitor (AST → IR)
-  ┌──────────────────────▼───────────────────────────────────┐
-  │           asctile MLIR Dialect                           │
-  │   GlobalTensorType / LocalTensorType  LoadOp / StoreOp   │
-  │   BinaryOps  UnaryOps  ReductionOps  ShapeOps            │
-  │   AtomicRMWOp  MatmulOp  SoftmaxOp  CountMaskOp  ...     │
-  └──────────────────────┬───────────────────────────────────┘
-                         │  AscTile passes (lib/Dialect/AscTile/Transforms/)
-                         │  + AscLower passes (lib/Conversion/LowerToAsc/)
-                         │  + AscendC passes (lib/Dialect/Asc/Transforms/)
-  ┌──────────────────────▼───────────────────────────────────┐
-  │           ascendc MLIR Dialect  (existing backend)       │
-  │   LocalTensor / GlobalTensor   TPipe / TQue              │
-  │   set_flag / wait_flag   Ascend C API ops                │
-  └──────────────────────┬───────────────────────────────────┘
-                         │  lib/Target/AscendC/ (CodeEmitter)
-  ┌──────────────────────▼───────────────────────────────────┐
-  │           Ascend C source (.cce)                         │
-  └──────────────────────┬───────────────────────────────────┘
-                         │  Bisheng compiler
-                         ▼
-                    NPU kernel binary (.o)
-```
+
+The extension is built in `experimental/asctile/`, but its Python package is installed and imported as `asc.experimental.asctile`. It reuses the root PyAsc AST visitor, runtime, target, and Bisheng integration rather than maintaining a separate host runtime.
 
 ### End-to-end compilation flow
 
 ```
 @asctile.jit kernel invocation
-  → argument type specialization  (same as asc1)
-  → two-level cache lookup         (same as asc1)
+  → argument type specialization  (same as asc)
+  → two-level cache lookup         (same as asc)
       → [miss]
-          AST walk → asctile MLIR (FunctionVisitor + asctile builder APIs)
+          AST walk → asctile MLIR (FunctionVisitor + pybind11 builders)
           ↓
-          AscTile passes  (unrolling, loop transforms, math specialization)
+          Tile-level transforms (location, CV strategy, matmul, FP8, math)
+          optional AscVF2 register fusion (vf_fusion=2)
           ↓
-          AscLower passes (lower asctile → ascendc dialect)
+          LowerToAsc passes (asctile → ascendc-compatible IR)
           ↓
-          ascendc passes  (UB allocation, sync insertion, boilerplate gen)
+          optional AscVF fusion (vf_fusion=1)
           ↓
-          CodeEmitter     (ascendc → Ascend C source)
+          ascendc passes (allocation, reuse, sync, boilerplate)
+          ↓
+          CodeEmitter     (MLIR → Ascend C source)
           ↓
           Bisheng         (Ascend C → .o binary)
           ↓
           cache store
-  → kernel launch via runtime rt library calls  (same as asc1)
+  → kernel launch via runtime rt library calls  (same as asc)
 ```
+
+When the `ASCTILE_INTERPRET` environment variable is set to `1`, `on`, or `true`, `asctile.jit` returns an interpreted function instead of invoking this compilation path. The interpreter is a debugging aid and does not represent the performance model.
 
 ---
 
 ## 4. Programming Model
 
-### 4.1 The two types: `GlobalTensor` and `LocalTensor`
+### 4.1 Core tensor types
 
 | | `GlobalTensor` | `LocalTensor` |
 |--|----------|--------|
-| **Memory** | Global Memory (HBM, GM) | On-chip: UB, L0A, L0B, L0C, L1 |
-| **Shape** | ND, may be dynamic (RuntimeInt dims) | ND, must be static (known at JIT time) |
-| **Creation** | `asctile.global_tensor(ptr, shape)` | Returned by `asctile.copy_in(...)` or creation ops |
-| **Mutability** | Passed to/from kernel; never computed in-kernel | Value semantics; produced by ops, consumed once |
-| **IR type** | `asctile.tensor<shape x dtype>` | `asctile.tile<shape x dtype, location>` |
+| **Memory** | Global memory (HBM/GM) | On-chip local memory selected by `TensorLocation` |
+| **Shape** | ND; dimensions may be runtime values (`RuntimeInt`) | ND; static at JIT time |
+| **Creation** | `asctile.global_tensor(base, shape, l2_cache=True)` | Returned by loads, copies, creation ops, and most compute ops |
+| **Semantics** | A descriptor for a contiguous external buffer | Value semantics: operations produce new SSA tiles |
+| **IR form** | `tensor<shape x dtype, #asctile.global>` | `tensor<shape x dtype, #asctile.local<LOCATION>>` |
 
-`GlobalTensor` is a *descriptor* — it holds a pointer and a shape. `LocalTensor` carries `ValueSemantics` in MLIR, meaning instances are value types — self-contained and safe to CSE, copy, and move. Each op produces a new tile SSA value. The compiler is free to map multiple logical tiles to the same physical UB region.
+`GlobalTensor` carries the base address, shape, dtype, and L2-cache policy. `LocalTensor` is safe to CSE, copy, and move; physical allocation is introduced later by the compiler. `tile.to(dtype, round_mode=...)` converts between dtypes, while `tile.to(location)` expresses a location conversion.
 
 ### 4.2 Memory hierarchy (`TensorLocation`)
 
-| Enum value | Hardware unit | Typical use |
-|------------|--------------|-------------|
-| `UB` | Unified Buffer | Vector operations (default) |
-| `L0A` / `L0B` | L0 matrix input buffers | Matmul inputs |
-| `L0C` | L0 matrix output buffer | Matmul accumulator |
-| `L1` | L1 cache | Intermediate staging |
+| Value | Typical use |
+|------------|-------------|
+| `Auto` | Leave the destination unresolved; `ResolveAutoLocation` selects a concrete location (usually `UB`) |
+| `UB` | Unified Buffer; vector computation and scalar-tile operations |
+| `L1` | Local staging, including the GM → L1 → L0 path for cube operands |
+| `L0A` / `L0B` | Cube matmul input buffers |
+| `L0C` | Cube matmul accumulator/output buffer |
+| `FIX` | Fixpipe-related local storage |
+| `BT` | Bias table for matmul bias initialization |
 
-`copy_in` defaults to `TensorLocation.UB`. Matmul implicitly creates `L0A`/`L0B`/`L0C` tiles; the LowerToL0 pass handles the layout conversion.
+`copy_in` accepts `TensorLocation.Auto`, `UB`, `L1`, `L0A`, `L0B`, and `BT`. Loads directly to `L0A`/`L0B`/`BT` are split into legal GM → L1 → destination paths. `copy` supports explicit local-to-local transfers such as L1 → L0A/L0B/BT, L0C → L1/UB, and UB → L1, including vector-sub-block distribution modes.
 
-### 4.3 Load and store
+### 4.3 Load, store, and local copies
 
 ```python
-# Load a local tensor from a global tensor:
-tile = asctile.copy_in(tensor, [base], [128])       # explicit element offsets
+# Tensor load; offsets are element offsets, and shape must be static.
+tile = asctile.copy_in(tensor, [base], [128])
 
-# Load a scalar (no shape → scalar load)
+# Scalar load: omit shape.
 scalar = asctile.copy_in(tensor, [i])
 
-# Optional padding for partial tiles
-tile = asctile.copy_in(tensor, [base], [128], pad_value=0.0)
+# Padding. real_shape says how much of the tile is live; the rest is pad_value.
+tile = asctile.copy_in(tensor, [base], [128], real_shape=[97], pad_value=0.0)
 
-# Copy a local tensor (or sub-region) into a fresh local tensor, optionally on another location
+# Local-to-local copy, subregion, relocation, and optional distribution mode.
 clone = asctile.copy(tile)
-sub   = asctile.copy(tile, [0], [64])
+sub = asctile.copy(tile, [0], [64])
+l0a = asctile.copy(l1_tile, [0, 0], [16, 32], TensorLocation.L0A)
 
-# Store local tensor or scalar back
-asctile.copy_out(tile, tensor, [base])
-asctile.copy_out(scalar_value, tensor, [i])
+# Store a tile, scalar, or one-element tile. real_shape supports partial stores.
+asctile.copy_out(tile, tensor, [base], real_shape=[97])
+asctile.copy_out(scalar, tensor, [i])
 ```
 
-The last dimension of every local tensor shape must be aligned to `ub_block_size` (32 bytes). This is enforced at JIT time via `check_data_alignment`.
+For 2D and higher tiles in `UB`, the last dimension must be aligned to 32 bytes. `copy_in` and `copy_out` also support `gather` and `scatter` along a non-final axis; `reindex` gathers individual elements from a local tensor. Higher-rank load/store support remains experimental.
 
-### 4.4 Operations
+### 4.4 Public API overview
 
-All operations produce new `LocalTensor` or scalar values; no mutation.
+`asc.experimental.asctile` exports the following API families; the generated Python reference is the complete, authoritative list.
 
-**Arithmetic / comparison** (tile ⊕ tile, tile ⊕ scalar, scalar ⊕ tile):
-`add`, `sub`, `mul`, `div`, `maximum`, `minimum`, `left_shift`, `right_shift`,
-`equal`, `not_equal`, `greater`, `greater_equal`, `less`, `less_equal`
+| Family | Public names |
+|--------|--------------|
+| Tensor and memory | `GlobalTensor`, `LocalTensor`, `TensorLocation`, `RoundMode`, `DistribMode`, `global_tensor`, `copy_in`, `copy_out`, `copy`, `gather`, `scatter`, `reindex` |
+| Arithmetic and comparison | `add`, `sub`, `mul`, `div`, `pow`, `maximum`, `minimum`, `equal`, `not_equal`, `greater`, `greater_equal`, `less`, `less_equal`, `bitwise_and`, `bitwise_or`, `bitwise_xor`, `left_shift`, `right_shift`; corresponding `LocalTensor` operators |
+| Unary math and normalization | `abs`, `ceil`, `floor`, `negative`, `relu`, `sqrt`, `rsqrt`, `exp`, `exp2`, `log`, `log2`, trigonometric/hyperbolic functions, `erf`, `softmax`, `rms_norm`, `layer_norm`, `bitwise_not` |
+| Reductions | `reduce_sum`, `reduce_max`, `reduce_min`, `reduce_prod`; `sum`, `max`, `min`, and `prod` methods with optional axes and `keep_dims` |
+| Shape | `broadcast_shapes`, `broadcast_tensors`, `broadcast_to`, `reshape`, `ravel`, `expand_dims`, `squeeze`, `transpose` |
+| Creation and casts | `full`, `full_like`, `zeros`, `zeros_like`, `zeros_acc`, `concat`, `cast`, `LocalTensor.to` |
+| Matrix multiplication | `matmul`, `matmul_acc`; `zeros_acc` creates the L0C accumulator and can initialize it with a `BT` bias |
+| Masking and selection | `mask`, `where` |
+| Atomics | `atomic_add`, `atomic_max`, `atomic_min` |
+| Programming model | `block_idx`, `block_num`, `sub_block_idx`, `sub_block_num`, `cv_strategy` |
+| Control flow | `range`, `static_range` |
+| Low-level interop | `empty`, `empty_like`, `from_asc`, `to_asc`, `inline`, `inline_vf` |
+| Debug | `device_assert`, `device_print`, `static_assert`, `static_print` |
+| Runtime and launch | `jit`, `autotune`, `CompileOptions`, `set_platform`, `Backend`, `Platform`, `KernelType`, `ConstExpr`, `GlobalAddress`, dtype constants |
 
-Operator overloads on `LocalTensor` (`+`, `-`, `*`, `/`, `>`, `==`, …) call the same functions. Dtypes are promoted automatically via `infer_common_dtype`.
+Dtype promotion follows the existing `infer_common_dtype` behavior. Most operations produce a new value; explicit low-level interop and atomic/store operations are the intentional mutation/escape-hatch exceptions.
 
-**Unary**:
-`abs`, `ceil`, `floor`, `negative`, `relu`,
-`sqrt`, `rsqrt`, `exp`, `exp2`, `log`, `log2`,
-`sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh`, `erf`, `softmax`, `rms_norm`
+### 4.5 `asctile.range`
 
-**Reductions** (one or more axes, optional `keep_dims`):
-`reduce_sum`, `reduce_max`, `reduce_min`, `reduce_prod`
-— with no axes: returns a scalar `PlainValue`.
-— also bound as methods: `tile.sum()`, `tile.max()`, etc.
-
-**Shape manipulation**:
-`reshape`, `ravel`, `broadcast_to`, `expand_dims`, `squeeze`
-
-**Creation**:
-`full(shape, value)`, `zeros(shape)`, `full_like`, `zeros_like`,
-`zeros_acc(shape, dtype)` — zeros tile in L0C (matmul accumulator),
-`concat(*tiles)` — concatenate along the first dimension.
-
-**Matrix multiply**:
-- `matmul(a, b)` — 2-D float tiles; result is always `float32`.
-- `matmul_acc(acc, a, b)` — fused matmul that accumulates into an existing `acc` tile (typically created with `zeros_acc`).
-
-**Conditional / masking**:
-- `where(mask, src0, src1)` — element-wise select.
-- `mask(count=…)` / `mask(bits=(hi, lo), other=…)` — context manager that wraps the enclosed operations in a conditional region (`CountMaskOp` / `BitwiseMaskOp`).
-
-**Atomics**:
-`atomic_add`, `atomic_max`, `atomic_min` — write back to a global `GlobalTensor`.
-
-### 4.5 Programming model operations
-
-```python
-i = asctile.block_idx()    # current NPU block index (PlainValue)
-n = asctile.block_num()    # total number of blocks (PlainValue)
-```
-
-### 4.6 `asctile.range`
-
-`asctile.range` extends the base range with two attributes that control compiler behaviour:
+`asctile.range` supports Python-style one-, two-, and three-argument forms and two compiler controls:
 
 ```python
 for i in asctile.range(start, stop, step, unroll_factor=4, gm_barrier=False):
     ...
 ```
 
-- `unroll_factor` — how many iterations to unroll. Tagged on the MLIR `for` op and processed by `UnrollLoop` pass.
-- `gm_barrier=True` — marks the loop body so `InsertBufIdSync` pass inserts explicit barriers for data transfer pipes.
+- `unroll_factor` — how many iterations to unroll. Tagged on the MLIR `scf.for` operation and processed by `UnrollLoop`.
+- `gm_barrier=True` — prevents overlapping GM accesses across iterations when iteration N reads data written by iteration N-1.
+
+`asctile.static_range` requires compile-time bounds and enables complete static unrolling. Plain Python `range` is remapped to `asctile.range` inside a JIT function.
 
 ---
 
@@ -256,62 +263,69 @@ for i in asctile.range(start, stop, step, unroll_factor=4, gm_barrier=False):
 
 ### 5.1 `asctile` dialect
 
-Defined in `include/ascir/Dialect/AscTile/IR/` using TableGen.
+Defined in `experimental/asctile/include/asctile/Dialect/AscTile/IR/` (TableGen declarations) and implemented in `experimental/asctile/lib/Dialect/AscTile/IR/`.
 
 **Types:**
 
-| Type | MLIR syntax | Python proxy |
-|------|------------|--------------|
-| `asctile.tensor<[N,M] x f32>` | ND global descriptor | `GlobalTensor` |
-| `asctile.tile<[128] x f16, UB>` | Fixed-shape local chunk | `LocalTensor` |
+| IR type | Python proxy |
+|---------|--------------|
+| `tensor<[M,N] x f32, #asctile.global>` | `GlobalTensor` |
+| `tensor<[128] x f16, #asctile.local<UB>>` | `LocalTensor` |
 
-`LocalTensor` carries `ValueSemantics`, meaning instances are value types — self-contained and safe to CSE, copy, and move. Both `LocalTensor` and `GlobalTensor` implement `ShapedTypeInterface`.
+Both are MLIR ranked tensor types with an `asctile` encoding. Global dimensions may be dynamic (`?`); local dimensions are static. `#asctile.local<LOCATION>` carries the `TensorLocation` enum (`Auto`, `L0A`, `L0B`, `L0C`, `UB`, `L1`, `FIX`, or `BT`). A logical location is not yet a physical address.
 
 **Key operations (from `Ops.td`):**
 
 | Category | Op | Description |
 |----------|----|-------------|
-| Tensor creation | `TensorOp` | Create a `GlobalTensor` from a pointer and shape list |
-| | `DimOp` | Read a dynamic dimension from a `GlobalTensor` at runtime |
-| | `AccumulatorOp` | Create a zeros tile in L0C (matmul accumulator) |
-| Memory transfer | `LoadOp` | Load tile from `GlobalTensor` with offsets → `LocalTensor` |
-| | `StoreOp` | Store `LocalTensor` to `GlobalTensor` with offsets |
-| | `StoreFixpipeOp` | Store an L0C tile to a `GlobalTensor` via the fixpipe path |
-| | `CopyOp` | Copy a tile (or sub-region) into a new tile |
-| | `CopyFixpipeOp` | Copy an L0C tile into another tile via fixpipe |
-| | `GetValueOp` | Scalar load from `GlobalTensor` |
-| | `SetValueOp` | Scalar store to `GlobalTensor` |
-| Element-wise compute | `CastOp` | Type conversion between tile dtypes |
-| | `ReluOp` | Fused ReLU |
-| | `CmpSOp` | Element-wise compare (vector-scalar) |
-| | `AddSOp` / `SubSOp` / `MulSOp` / `DivSOp` / `MinSOp` / `MaxSOp` / `ShLSOp` / `ShRSOp` | Vector-scalar binary ops |
-| Reduction / norm | `ReduceOp` | Reduce tile along one or more axes |
-| | `ReduceAs1dOp` | Reduce a tile to a 1-element tile or a scalar |
-| | `SoftmaxOp` | Row-wise softmax on a 1D / 2D tile |
-| | `RmsNormOp` | RMS normalisation |
-| Matmul | `MatmulOp` | 2-D matrix multiply |
-| | `MatmulAccOp` | 2-D matrix multiply accumulating into an L0C tile |
-| Shape | `ReshapeOp` | Reshape a tile |
-| | `BroadcastOp` | Broadcast tile to a wider shape |
-| Atomic | `AtomicRMWOp` | Atomic read-modify-write (add / max / min) |
-| Region / control | `CountMaskOp` | Region: conditional on element count |
-| | `BitwiseMaskOp` | Region: conditional on bitmask |
-| | `YieldOp` | Region terminator |
+| Tensor creation | `tensor` | Create a `GlobalTensor` from a base pointer, runtime sizes, and L2-cache policy |
+| | `dim` | Read a dynamic dimension from a `GlobalTensor` at runtime |
+| | `accumulator` | Create an L0C accumulator; optionally initialize it from a `BT` bias tile |
+| Memory transfer | `load` | Load a static-shape tile or padded tile from a `GlobalTensor` |
+| | `store` | Store a `LocalTensor` to a `GlobalTensor`, optionally with `real_shape` |
+| | `store_fixpipe` | Store an L0C tile through the fixpipe path |
+| | `copy` | Copy a tile/subregion to a new tile, optionally relocating and distributing it |
+| | `copy_fixpipe` | Copy an L0C tile through fixpipe |
+| | `get_value` / `set_value` | Scalar load/store from/to a `GlobalTensor` |
+| | `gather` / `scatter` | Gather/scatter subtensors between `GlobalTensor` and `LocalTensor` |
+| | `reindex` | Gather individual elements from a local tensor by index |
+| Element-wise compute | `cast` | Type conversion between tile dtypes |
+| | `relu` | Fused ReLU |
+| | `adds`, `subs`, `muls`, `divs`, `mins`, `maxs`, `shls`, `shrs`, `leaky_relu`, `cmps` | Vector-scalar compute |
+| | `power`, `bitwise_not` | Tile-wise power and bitwise complement |
+| Reduction / norm | `reduce` | Reduce tile along one or more axes |
+| | `reduce_as_1d` | Reduce a tile to a 1-element tile or a scalar |
+| | `softmax` | Row-wise softmax on a 1D/2D tile |
+| | `rms_norm` / `layer_norm` | Normalisation operations |
+| Matmul | `matmul` | 2-D matrix multiply |
+| | `matmul_acc` | 2-D matrix multiply accumulating into an L0C tile |
+| Shape | `reshape` | Reshape a tile |
+| | `broadcast` | Broadcast tile to a wider shape |
+| | `transpose` | Permute tile dimensions |
+| Atomic | `atomic_rmw` | Atomic read-modify-write (add / max / min) |
+| Region / control | `count_mask`, `bitwise_mask` | Regions guarded by element count or bitmask |
+| | `cube_group` / `vector_group` | Group operations for Cube and Vector sides of a CV kernel |
+| | `cv_strategy` | Express a split/join strategy between Cube and Vector sub-blocks |
+| | `yield` | Region terminator |
+| Interop / debug | `inline`, `inline_vf` | Emit explicit Ascend C or VF code fragments |
+| | `assert`, `dump_tensor` | Device assertions and dump hooks |
 
-**Standard dialect ops** (`arith`, `scf`, `math`) are emitted directly by the AST walker for scalar arithmetic and control flow; the AscLower passes later handle them.
+Scalar arithmetic and control flow use standard MLIR `arith`, `math`, and `scf` operations. Tile-tensor arithmetic initially also uses standard shaped-tensor operations where possible; `TransformMathOps` specializes them into `asctile` vector-scalar operations before lowering.
 
 ### 5.2 IR generation
 
-`FunctionVisitor` (Python AST walker, `python/asc/codegen/function_visitor.py`) calls pybind11-exposed builder methods from `python/src/OpBuilder.cpp` to create `asctile.*` ops. Every `asctile.*` Python API call produces exactly one (or a small fixed number of) `asctile` operations. No analysis is needed at this stage.
+The base AST visitor is `python/asc/codegen/function_visitor.py`. AscTile specializes it in `experimental/asctile/python/asctile/runtime/codegen.py`; builder methods exposed through `experimental/asctile/python/src/OpBuilder.cpp` create `asctile.*` operations. Public API calls generally lower to one op or a small fixed sequence. No memory allocation or synchronization decisions are made during AST construction.
 
 ### 5.3 Lowering chain
 
-```
-asctile dialect
-    ↓  AscTile passes  (loop unrolling, math specialization, masking)
-    ↓  AscLower passes (lower each asctile op → ascendc ops + scf + arith)
-ascendc dialect
-    ↓  ascendc passes  (UB allocation, sync insertion, boilerplate)
+```text
+asctile dialect + standard MLIR
+    ↓ AscTile transforms (location, CV, cube, math, FP8, masking)
+    ↓ optional AscVF2 transforms (vf_fusion=2)
+    ↓ LowerToAsc transforms (asctile → ascendc-compatible operations)
+    ↓ optional AscVF transforms (vf_fusion=1)
+ascendc dialect + emitasc/scf/arith/math
+    ↓ AscendC transforms (allocation, reuse, sync, boilerplate)
 Ascend C source
 ```
 
@@ -319,56 +333,77 @@ Ascend C source
 
 ## 6. Optimization Passes
 
-The full pass pipeline is scheduled by `Compiler._schedule_passes()` inside `python/asc/runtime/compiler.py`. The `run_asctile_passes=True` flag (set automatically by `asctile.jit`) activates the AscTile and AscLower phases.
+The pipeline is scheduled by `Compiler.schedule_passes()` in `experimental/asctile/python/asctile/runtime/compiler.py`. Paths below are relative to the repository root. The generated pass references under `experimental/asctile/docs/mlir/passes/` contain the detailed transformation rules.
 
-### 6.1 AscTile passes  (`lib/Dialect/AscTile/Transforms/`)
+### 6.1 AscTile transforms (`experimental/asctile/lib/Dialect/AscTile/Transforms/`)
 
-These operate on the `asctile` dialect before lowering begins.
-
-| Pass | Purpose |
-|------|---------|
-| `PromotePureOps` | Hoist pure (side-effect-free) ops — e.g., shape computations — out of loop bodies |
-| `SplitCubeLoad` | Split loads destined for L0A/L0B into the legal Cube data path |
-| `LegalizeMatmul` | Rewrite `MatmulOp`/`MatmulAccOp` into the form expected by the AscLower passes |
-| `TransformMathOps` | Specialise generic `math.*` ops into tile-aware equivalents that the AscLower pass knows how to handle |
-| `TransformStoreFixpipe` | Convert eligible `StoreOp`s of L0C tiles into `StoreFixpipeOp` |
-| `UnscalarizeReduction` (C310 only) | Replace scalar-tail reductions with vector forms |
-| `UnrollLoop` | Physically unroll loops tagged by `unroll_factor` |
-| `Canonicalizer`, `CSE` | Standard MLIR cleanup between stages |
-
-### 6.2 AscLower passes  (`lib/Conversion/LowerToAsc/`)
-
-These lower `asctile.*` operations into `ascendc.*` + standard MLIR ops.
+These operate while tile-level types and operations are still present.
 
 | Pass | Purpose |
 |------|---------|
-| `ExpandMath` | Replace `math.*` ops with sequences of `ascendc` vector intrinsics |
+| `ResolveAutoLocation` | Select concrete locations for `TensorLocation.Auto` operands/results |
+| `LocationCastToCopy`, `FulfillDataTransfer` | Materialize legal location conversions and data transfers |
+| `VerifyTensorLocation` | Reject unsupported locations and transfer combinations |
+| `SplitCubeLoad` | Split direct GM → L0A/L0B/BT loads into the legal staged path |
+| `PrepareCVStrategy`, `ApplyCVStrategy`, `WrapCVGroups`, `MergeCVGroups` | Partition and annotate Cube/Vector work for mixed-core kernels |
+| `CombineExtractSlice` | Fold eligible `tensor.extract_slice` operations into producers |
+| `CubeTransposeToLoad`, `VectorTransposeToLoadStore` (C310) | Fold transposes into load/store/copy attributes |
+| `LegalizeMatmul`, `MarkMatmulAccWithBias`, `DetectBiasLoad` | Legalize matmul shapes, bias, and BT data flow |
+| `ApplyHomomorphism` | Move suitable scalar operations across supported tile operations |
+| `FoldCast`, `ReplaceFp8Ops` | Simplify casts and legalize FP8 operation forms |
+| `TransformMathOps` | Specialize standard arithmetic/math operations into tile-aware forms |
+| `TransformStoreFixpipe` | Convert eligible L0C stores into fixpipe stores |
+| `MarkReuseSource` | Annotate values that can participate in memory reuse |
+| `UnscalarizeReduction` (C310) | Replace scalar-tail reductions with vector forms |
+| `UnrollLoop` | Unroll `scf.for` loops tagged with `unroll_factor` |
+
+MLIR `Canonicalizer`, `CSE`, and `ReconcileUnrealizedCasts` are interleaved between these transformations.
+
+### 6.2 Vector-function fusion
+
+VF fusion is available only on C310.
+
+| Mode | Passes | Behavior |
+|------|--------|----------|
+| `vf_fusion=0` | None | Keep ordinary UB-based operations |
+| `vf_fusion=1` | `PromoteCastOps`, `FindVFGroup`, `CanonicalizeVFGroup`, `LowerToReg`, `DispatchVFFusion`, `MaterializeLoadStore`, `InlineVFGroup` from `experimental/asctile/lib/Dialect/AscVF/Transforms/` | Legacy register-level VF-block path |
+| `vf_fusion=2` | `OutlineVFGroup`, `ShrinkVFSignature`, `Vectorize`, `ReorderGroupedOps`, `FuseVFLoops`, `PromoteMemToReg`, `DropDeadWrite`, `MergeIntoTransfer`, `InsertVFSync`, `LowerToReg`, and related passes from `experimental/asctile/lib/Dialect/AscVF2/Transforms/` | Modern path; runs before LowerToAsc and includes affine loop normalization/fusion |
+
+### 6.3 LowerToAsc passes (`experimental/asctile/lib/Conversion/LowerToAsc/`)
+
+These lower `asctile.*` operations into `ascendc.*` plus standard MLIR operations.
+
+| Pass | Purpose |
+|------|---------|
+| `ExpandMath` | Replace `math.*` operations with `ascendc` vector intrinsic sequences |
 | `RedressI1Tensor` | Widen boolean (i1) tensors to `i8`/`ui8` as required by Ascend C |
 | `LowerArith` | Lower `arith.*` scalar ops to `ascendc` equivalents |
 | `LowerArithBinary` | Lower tile-scalar and scalar-tile arithmetic |
 | `LowerAtomic` | Lower `AtomicRMWOp` → `ascendc.atomic_*` |
-| `LowerAscTileDataTransfer` | Lower `LoadOp`/`StoreOp`/`CopyOp`/fixpipe variants to `ascendc` data-copy ops |
-| `LowerAscTile` | Main lowering: `CastOp`/`ReshapeOp`/reduction ops/… → `ascendc` vector ops |
-| `LowerAscTileI1` | Handle boolean tile lowering special cases |
+| `LowerAscTileDataTransfer` | Lower load/store/copy/fixpipe variants to `ascendc` data-copy operations |
+| `LowerAscTile` | Main tile-op lowering: casts, reductions, normalizations, and related operations |
+| `LowerAscTileToBasic` | Lower high-level tile operations to basic ascendc forms |
 | `LowerMath` | Lower remaining `math.*` ops |
 | `LowerSCF` | Lower `scf.for` loops to `ascendc`-compatible form |
+| `LowerTensor` | Lower remaining tensor operations |
 | `DisplaceConcat` | Replace `tensor.concat` with adjacent allocations / copies |
 | `RealizeConversionCast` | Materialise any pending unrealized casts from the lowering |
-| `ExpandMask` | Lower `CountMaskOp`/`BitwiseMaskOp` regions → `ascendc.set_mask`/`wait_mask` sequences |
+| `ExpandMask` | Lower `count_mask`/`bitwise_mask` regions into mask sequences |
 
-### 6.3 ascendc passes  (after lowering, `lib/Dialect/Asc/Transforms/`)
+### 6.4 AscendC passes
 
-Once all `asctile` ops are gone, the existing ascendc pipeline takes over:
+Once `asctile` operations are gone, the backend pipeline takes over. Extension-specific passes live in `experimental/asctile/lib/Dialect/AscendC/Transforms/`; shared base passes live in `lib/Dialect/Asc/Transforms/`.
 
 | Phase | Key passes |
 |-------|-----------|
-| **Lowering glue** | `PrivatizeFunc`, `FillAscOperands`, `FixupMmadAccParams`, `LowerToL0` |
-| **Memory allocation** | `InputOutputTensor`, `ReuseUBAllocation`, `HoistTensorAllocation`, `FuseVFBlock` (when `vf_fusion=True`), `AllocateTensor` (when `static_alloc=True`) / `MaterializeTensor` (otherwise), `UnifyPipe` |
-| **Synchronization** | `EraseSync`, `HoistQueBind`, then either `InsertSync` (C220) or `InsertBufIdSync` + `FuseBufIdSync` (C310); finally `UnifyPipe`. `VerifySync` runs when `verify_sync=True` |
-| **Optimization** | `LICM`, `SCCP`, `Canonicalizer` |
-| **Postprocessing** | `DeclarePyStruct`, `GenerateBoilerplate`, `DefineCubeOnly` (when `matmul_cube_only=True`), `LegalizeKernelArgs`, `DetectKernelType`, `DetectEnableDebug`, `ComputeMemoryConsumption` |
+| **Initial cleanup** | `PrivatizeFunc`, `Inliner`, `SymbolDCE`, `Canonicalizer` |
+| **Lowering glue** | `PromoteCVBlock`, `FillAscOperands`, `FixupMmadAccParams`, `InputOutputTensor`, `RefineCubePosition` |
+| **Memory** | `ReuseUBAllocation` (`reuse_alloc=1`), `ComputeReuseGroup`, `HoistTensorAllocation`, `ReuseTensorAllocation` (`reuse_alloc=2`), `DispatchAlloc`, `UnifyBiasTensor`, `UnifyPipe` |
+| **Optimization** | `UnrollLoop`, `Canonicalizer`, `CSE`, `LICM`, `SCCP` |
+| **Cross-core and pipe sync** | `InsertCrossCoreSync`, `InsertCrossCoreSyncGM`, `EraseSync`, `HoistQueBind`; `InsertQueSync` on C220, or `InsertBufIdSync`, `InsertBiasBufIdSync`, and `FuseBufIdSync` on C310 |
+| **Postprocessing** | `InlineVFGroup`, `WrapVecScope`, `DeclarePyStruct`, `GenerateBoilerplate`, `InsertSubBlockGuard` (`cv_ratio=1`), `DefineCubeOnly` (`matmul_cube_only=True`), `LegalizeKernelArgs`, `DetectKernelType`, `InsertInitDump`, `VerifySync` (`verify_sync=True`), `StripDebugInfo` (`strip_loc=True`), `ComputeMemoryConsumption` |
 
-`ComputeMemoryConsumption` is **only active in asctile mode** and records per-`TPosition` UB usage as a module attribute; it raises a compile-time error on overflow.
+`ComputeMemoryConsumption` is scheduled by the AscTile compiler and records per-`TPosition` usage as a module attribute; it raises a compile-time error on overflow.
 
 ---
 
@@ -378,9 +413,9 @@ Once all `asctile` ops are gone, the existing ascendc pipeline takes over:
 
 From the user's perspective, memory management is invisible. The user:
 1. Creates `GlobalTensor` descriptors pointing to HBM buffers.
-2. Calls `copy_in(tensor, shape, offsets=…)` to bring data into a `LocalTensor`.
+2. Calls `copy_in(tensor, offsets, shape, location=…)` to bring data into a `LocalTensor`.
 3. Applies operations to produce new tiles.
-4. Calls `copy_out(tile, tensor, offsets=…)` to write results back.
+4. Calls `copy_out(tile, tensor, offsets, real_shape=…)` to write results back.
 
 The compiler is responsible for mapping each `LocalTensor` SSA value to a physical UB region.
 
@@ -390,14 +425,15 @@ Two strategies, selected per compilation:
 
 | Strategy | Option | How it works |
 |----------|--------|-------------|
-| **TPipe-managed** | `static_alloc=False` | `MaterializeTensor` emits `TPipe` + `AllocTensor`/`FreeTensor` in the generated Ascend C. Flexible; incurs scalar overhead per tile. Default on 910B / 910_93. |
-| **Static allocation** | `static_alloc=True` | `AllocateTensor` computes a fixed layout at compile time and emits direct UB address arithmetic. Zero scalar overhead; requires all tile sizes to be statically known. Default on C310. |
+| **TPipe-backed** | `static_alloc=False` | `MaterializeTensor` emits TPipe-backed allocation in generated Ascend C. It is more flexible but adds scalar overhead. Default on C220. |
+| **Static** | `static_alloc=True` | `AllocateTensor` computes fixed offsets at compile time. It requires static tile shapes. Default on C310, except for kernels containing an incompatible `BroadcastOp`, for which `DispatchAlloc` falls back to TPipe. |
 
-`static_alloc` is `Optional[bool]`; when left at `None`, `Compiler.__init__` resolves it to `True` on C310 and `False` otherwise.
+`static_alloc` is `Optional[bool]`. When it is `None`, the module attribute is omitted and `DispatchAlloc` selects the strategy from the target architecture and operation mix. Explicit `False` forces TPipe-backed allocation; explicit `True` forces static allocation.
 
 **UB pressure reduction (both modes):**
 - `HoistTensorAllocation` — move allocations above loops so one allocation covers all iterations.
-- `ReuseUBAllocation` (`reuse_alloc=1`) — when a tile's lifetime ends before a new one is needed, reuse its UB region.
+- `ReuseUBAllocation` (`reuse_alloc=1`) — legacy liveness-based reuse, applied both to input/output tensors and ordinary tiles.
+- `ReuseTensorAllocation` (`reuse_alloc=2`) — modern reuse based on reuse groups; recommended for most kernels.
 - `ComputeMemoryConsumption` — sums all live tile sizes per `TPosition` and fails the compilation if UB limits are exceeded.
 
 ### 7.3 Synchronization
@@ -405,9 +441,10 @@ Two strategies, selected per compilation:
 Because asctile users don't write `set_flag`/`wait_flag`, all synchronization is inserted by the compiler:
 
 - `insert_sync=True` is set automatically by `asctile.jit`.
-- On **C220**: `InsertSync` uses the classic queue-position–based algorithm.
-- On **C310**: `InsertBufIdSync` uses a newer algorithm that reduces sync overhead by tracking buffer IDs rather than queue positions; `FuseBufIdSync` merges adjacent sync ops.
+- On **C220**: `InsertQueSync` uses queue-based synchronization.
+- On **C310**: `InsertBufIdSync` tracks buffer IDs instead of queue positions; `InsertBiasBufIdSync` handles BT bias tensors, and `FuseBufIdSync` merges adjacent synchronization operations.
 - `verify_sync=True` runs an additional `VerifySync` pass after sync insertion as a sanity check.
+- `auto_sync=True` independently enables Bisheng's `--cce-auto-sync`; AscTile's MLIR `insert_sync` pass is not a replacement for that compiler option.
 
 ---
 
@@ -419,34 +456,59 @@ Because asctile users don't write `set_flag`/`wait_flag`, all synchronization is
 from asc.experimental import asctile
 
 @asctile.jit
-def vadd(x_ptr, y_ptr, out_ptr, size: int, tiles_per_block: int, TILE: asc.ConstExpr[int]):
-    x_gm   = asctile.global_tensor(x_ptr,   [size])
-    y_gm   = asctile.global_tensor(y_ptr,   [size])
+def vector_add(x_ptr: asctile.GlobalAddress,
+               y_ptr: asctile.GlobalAddress,
+               out_ptr: asctile.GlobalAddress,
+               size: int,
+               tile_size: asctile.ConstExpr[int]):
+    x_gm = asctile.global_tensor(x_ptr, [size])
+    y_gm = asctile.global_tensor(y_ptr, [size])
     out_gm = asctile.global_tensor(out_ptr, [size])
 
-    base = asctile.block_idx() * tiles_per_block * TILE
-    for i in asctile.range(tiles_per_block):
-        off = base + i * TILE
-        x   = asctile.copy_in(x_gm, [off], [TILE])
-        y   = asctile.copy_in(y_gm, [off], [TILE])
-        asctile.copy_out(x + y, out_gm, [off])
+    tiles_per_core = asctile.ceildiv(asctile.ceildiv(size, asctile.block_num()), tile_size)
+    core_offset = asctile.block_idx() * tiles_per_core * tile_size
 
-vadd[8](x, y, out, n, asctile.ceildiv(n // 256, 8), TILE=256)
+    for i in asctile.range(tiles_per_core, unroll_factor=2):
+        offset = core_offset + i * tile_size
+        x = asctile.copy_in(x_gm, [offset], [tile_size])
+        y = asctile.copy_in(y_gm, [offset], [tile_size])
+        asctile.copy_out(x + y, out_gm, [offset])
+
+vector_add[8](x, y, out, x.numel(), 128)
 ```
 
 ### Softmax (row-wise)
 
 ```python
-@asctile.jit
-def softmax(x_ptr, out_ptr, rows: int, cols: int, TILE: asc.ConstExpr[int]):
-    x_gm   = asctile.global_tensor(x_ptr,   [rows, cols])
-    out_gm = asctile.global_tensor(out_ptr, [rows, cols])
+@asctile.jit(reuse_alloc=2, vf_fusion=2)
+def row_wise_softmax(rows: asctile.LocalTensor) -> asctile.LocalTensor:
+    row_max = asctile.reduce_max(rows, 1, keep_dims=True)
+    shifted = rows - row_max
+    exp_vals = asctile.exp(shifted)
+    return exp_vals / asctile.reduce_sum(exp_vals, 1, keep_dims=True)
 
-    for row in asctile.range(asctile.block_idx(), rows, asctile.block_num()):
-        x = asctile.copy_in(x_gm, [row, 0], [1, TILE])
-        exp_x = asctile.exp(x - x.max())
-        asctile.copy_out(exp_x / exp_x.sum(), out_gm, [row, 0])
+@asctile.jit(reuse_alloc=2, vf_fusion=2)
+def fused_softmax(input_ptr, output_ptr, num_rows, num_cols, tile_shape: asctile.ConstExpr):
+    in_gm = asctile.global_tensor(input_ptr, [num_rows, num_cols])
+    out_gm = asctile.global_tensor(output_ptr, [num_rows, num_cols])
+
+    rows_per_block = asctile.ceildiv(num_rows, asctile.block_num())
+    block_offset = asctile.block_idx() * rows_per_block
+    ub_loop = asctile.ceildiv(rows_per_block, tile_shape[0])
+
+    for i in asctile.range(ub_loop, unroll_factor=2):
+        row_start = block_offset + i * tile_shape[0]
+        rows = asctile.copy_in(
+            in_gm,
+            [row_start, 0],
+            [tile_shape[0], tile_shape[1]],
+            pad_value=float("-inf"),
+        )
+        asctile.copy_out(row_wise_softmax(rows), out_gm, [row_start, 0])
 ```
+
+The softmax tile width must be 32-byte aligned. For a runtime column count that is not aligned, round the tile width up and pad with `-inf`, the identity for `max`.
+`vf_fusion=2` in this example requires a C310 (`Ascend950PR_95*`) target.
 
 ---
 
@@ -462,7 +524,12 @@ The observations from that document inform the design decisions in §10.
 
 ## 10. Key Design Decisions
 
-_TODO: to be filled in._
+- **Logical tiles before physical buffers.** The frontend models `LocalTensor` as a value with a logical location. Allocation, reuse, and synchronization remain compiler decisions until after tile-level transformations and unrolling.
+- **A dedicated tile dialect.** Keeping tile operations distinct from `ascendc` exposes location, CV grouping, matmul, and fusion intent to transformations that would be difficult or impossible after scalar/API lowering.
+- **Architecture-specific backends, one frontend.** C220 and C310 share the Python model and most tile-level IR, while synchronization, VF, register, and allocation strategies diverge in later passes.
+- **Optimization is selectable.** Memory reuse and VF fusion have multiple implementations because aggressive transformations can trade memory pressure, code size, and performance differently by kernel.
+- **Escape hatches are explicit.** `to_asc`, `from_asc`, `inline`, and `inline_vf` provide interop without making the whole Ascend C API part of the high-level contract.
+- **Debugging does not alter the programming model.** Interpreter mode, device debug operations, pass IR dumping, and sync verification are controlled separately from kernel semantics.
 
 ---
 
@@ -475,16 +542,17 @@ _TODO: to be filled in._
 
 ---
 
-## Appendix: Key `CompileOptions` for AscTile
+## Appendix: `CompileOptions` for AscTile
 
-| Option | Default in `asctile.jit` | Effect |
-|--------|-----------------------|--------|
-| `insert_sync` | `True` | Auto-insert sync barriers |
-| `static_alloc` | `None` → arch-dependent (`True` on C310, `False` on C220) | Static vs TPipe-managed UB allocation |
-| `reuse_alloc` | `0` | Reuse freed UB regions |
-| `vf_fusion` | `False` | Fuse consecutive vector ops into VF (vector function) blocks |
-| `verify_sync` | `False` | Run `VerifySync` pass after sync insertion |
-| `matmul_cube_only` | `False` | Emit cube-only kernels (drives `DefineCubeOnly`) |
-| `auto_sync` | `True` | Pass `--cce-auto-sync` to Bisheng (separate from MLIR `insert_sync`) |
-| `opt_level` | `3` | Bisheng `-O` level (1–3) |
-| `always_compile` | `False` | Bypass cache, recompile every call |
+`asc.experimental.asctile.CompileOptions` extends `asc.runtime.compiler.CompileOptions`. All fields can be passed to `asctile.jit(**options)` or to `asctile.autotune` configurations.
+
+| Option | Type/default | Effect |
+|--------|--------------|--------|
+| `cv_ratio` | `Literal[1, 2]`, default `1` | Number of vector sub-cores per cube sub-core; drives CV grouping and `InsertSubBlockGuard` |
+| `debug` | `bool`, default `False` | Keep `device_print`/`device_assert`; when false, `RemoveDebugOps` deletes them |
+| `insert_sync` | `bool`, default `True` | Run AscTile's MLIR synchronization-insertion pipeline |
+| `reuse_alloc` | `Literal[0, 1, 2]`, default `0` | `0`: disabled; `1`: legacy `ReuseUBAllocation`; `2`: modern `ReuseTensorAllocation` (recommended) |
+| `static_alloc` | `Optional[bool]`, default `None` | `True`: force static allocation; `False`: force TPipe-backed allocation; `None`: let `DispatchAlloc` choose |
+| `vf_fusion` | `Literal[0, 1, 2]`, default `0` | `0`: disabled; `1`: legacy AscVF; `2`: modern AscVF2. C310 only |
+
+Other options are inherited from the existing `CompileOptions`.

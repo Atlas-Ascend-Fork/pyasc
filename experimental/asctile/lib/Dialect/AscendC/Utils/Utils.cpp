@@ -11,6 +11,7 @@
 #include "asctile/Dialect/AscendC/Utils/Utils.h"
 
 #include "asctile/Dialect/AscVF/IR/AscVF.h"
+#include "asctile/Dialect/AscVF2/IR/AscVF2.h"
 
 #include "ascir/Dialect/Asc/Utils/Utils.h"
 
@@ -67,7 +68,7 @@ SmallVector<OpOperand*> collectAllUses(LocalTensorAutoOp tensorOp)
 
 Pipe getOpPipeExt(Operation* op, Pipe defaultPipe)
 {
-    if (isa<ascvf::VFGroupOp>(op))
+    if (isa<ascvf::VFGroupOp, ascvf2::VFGroupOp>(op))
         return Pipe::PIPE_V;
     return getOpPipe(op, defaultPipe);
 }

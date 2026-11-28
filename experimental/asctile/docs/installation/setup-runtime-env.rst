@@ -19,17 +19,17 @@ Ascend CANN
 -----------
 
 1. Download installation package from `the download center <https://www.hiascend.com/cann/download>`__
-   (recommended version is ``9.2.0``) **depending on the host platform**:
+   (recommended version is ``9.2.1``) **depending on the host platform**:
 
    .. code:: bash
 
-      wget https://ascend-cann-open.obs.cn-north-4.myhuaweicloud.com/CANN/CANN%209.2.0/Ascend-cann_9.2.0_linux-x86_64.run
+      wget https://ascend-cann-open.obs.cn-north-4.myhuaweicloud.com/CANN/CANN%209.2.1/Ascend-cann_9.2.1_linux-x86_64.run
 
 2. Install downloaded package with the following command:
 
    .. code:: bash
 
-      bash Ascend-cann_9.2.0_linux-x86_64.run --full
+      bash Ascend-cann_9.2.1_linux-x86_64.run --full
 
 3. Enable CANN environment:
 
@@ -39,7 +39,7 @@ Ascend CANN
        export LD_LIBRARY_PATH=$ASCEND_HOME_PATH/tools/simulator/Ascend950PR_9599/lib:$LD_LIBRARY_PATH
 
 To learn more about CANN environment, visit `the homepage <https://www.hiascend.com/cann>`__.
-Ascend C API reference is available in `the documentation <https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/920/API/ascendcopapi/atlasascendc_api_07_0003.html>`__.
+Ascend C API reference is available in `the documentation <https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/920/API/ascendcopapi/docs/zh/api/api_list.md>`__.
 
 PyTorch
 -------

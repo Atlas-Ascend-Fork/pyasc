@@ -189,9 +189,6 @@ LogicalResult VFForOp::verify()
 {
     if (getBody()->getArguments().size() != 1)
         return emitOpError("block must have one argument");
-    if (!getOperation()->getParentOfType<emitasc::VecScopeOp>()) {
-        return emitOpError("must be inside emitasc.vec_scope block");
-    }
     return success();
 }
 

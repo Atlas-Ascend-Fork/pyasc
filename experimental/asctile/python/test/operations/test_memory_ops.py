@@ -188,3 +188,25 @@ def test_reindex(require_c310, src_shape, idx_shape, index_dtype):
     reindex_kernel[1](src, idx, out, src_shape, idx_shape)
     golden = src.reshape(-1)[idx.to(torch.int64)]
     torch.testing.assert_close(out, golden)
+
+
+@asctile.jit(always_compile=True)
+def kernel_copy_ub_to_ub(x_ptr, y_ptr, tensor_shape: asctile.ConstExpr, tile_shape: asctile.ConstExpr,
+                         offsets: asctile.ConstExpr) -> None:
+    xt = asctile.copy_in(asctile.global_tensor(x_ptr, tensor_shape), [0] * len(tensor_shape), tensor_shape)
+    yt = asctile.copy(xt, offsets, tile_shape)
+    asctile.copy_out(yt, asctile.global_tensor(y_ptr, tile_shape), [0] * len(tile_shape))
+
+
+@pytest.mark.parametrize("tensor_shape, tile_shape, offsets", (
+    ([128], [128], [0]),
+    ([8, 16], [8, 16], [0, 0]),
+    ([16, 128], [16, 64], [0, 64]),
+))
+def test_copy_ub_to_ub(require_c310, tensor_shape, tile_shape, offsets):
+    require_c310()
+    x = torch.randn(tensor_shape, dtype=torch.float32)
+    y = torch.zeros(tile_shape, dtype=torch.float32)
+    kernel_copy_ub_to_ub[1](x, y, tensor_shape, tile_shape, offsets)
+    slices = tuple(slice(off, off + size) for off, size in zip(offsets, tile_shape))
+    torch.testing.assert_close(y, x[slices])

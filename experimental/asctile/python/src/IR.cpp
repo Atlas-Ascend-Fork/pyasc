@@ -11,6 +11,8 @@
 #include "asctile/Dialect/AscTile/IR/AscTile.h"
 #include "asctile/Dialect/AscTile/Utils/Attributes.h"
 #include "asctile/Dialect/AscVF/IR/AscVF.h"
+#include "asctile/Dialect/AscVF2/IR/AscVF2.h"
+#include "asctile/Dialect/AscendC/IR/Interfaces.h"
 #include "asctile/Dialect/AscendC/Utils/Attributes.h"
 
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
@@ -161,9 +163,11 @@ void mlir::asctile::initIRModule(py::module&& m)
 {
     m.def("load_dialects", [](MLIRContext& context) {
         DialectRegistry registry;
-        registry.insert<asctile::AscTileDialect, ascvf::AscVFDialect, tensor::TensorDialect>();
+        ascendc::registerReusableSrcModels(registry);
+        registry.insert<asctile::AscTileDialect, ascvf::AscVFDialect, ascvf2::AscVF2Dialect, tensor::TensorDialect>();
         asctile::registerExternalModels(registry);
         ascvf::registerExternalModels(registry);
+        ascvf2::registerExternalModels(registry);
         context.appendDialectRegistry(registry);
         context.loadAllAvailableDialects();
     });

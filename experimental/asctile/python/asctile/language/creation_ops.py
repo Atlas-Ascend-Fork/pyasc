@@ -295,43 +295,60 @@ def cast(input: Union[LocalTensor, RuntimeNumeric], dtype: DataType,
 
 
 @require_jit
-def concat(*inputs: LocalTensor) -> LocalTensor:
+def concat(*inputs: LocalTensor, dim: int) -> LocalTensor:
     """
-    Concatenate tensors along the first dimension.
+    Concatenate tensors along the specified dimension.
 
-    All input tensors must have the same shape except for the first dimension, and must have the same data type.
+    All input tensors must have the same shape except for dimension ``dim``, and must have the same data type.
+
+    Concatenation is supported along ``dim=0`` for tensors that are expected to be located in ``UB`` and along ``dim=1``
+    for ``L0C`` tensors.
 
     The supported data types are: ``int8``, ``int16``, ``int32``, ``int64``, ``float16``, ``bfloat16``, ``float32``.
 
     Args:
         inputs: Two or more tensors to concatenate
+        dim: Dimension along which to concatenate the tensors
 
     Returns:
-        LocalTensor: A new tensor that is the concatenation of all input tensors along the first dimension
+        LocalTensor: A new tensor that is the concatenation of all input tensors along dimension ``dim``
 
     Raises:
         TypeError: If any input is not a LocalTensor
-        RuntimeError: If no inputs are provided, shapes are incompatible, dtypes don't match,
-            or tensor dtype size does not fit an integer number of bytes
+        ValueError: If ``dim`` is neither 0 nor 1
+        RuntimeError: If no inputs are provided, tensors do not have sufficient rank, shapes are incompatible, dtypes
+            don't match, or tensor dtype size does not fit an integer number of bytes
 
     Examples:
-        Concatenate two tensors along the first dimension: ::
+        Concatenate two ``UB`` tensors along the first dimension: ::
 
             input_a = asctile.copy_in(x_gm, [0, 0], [64, 32])
             input_b = asctile.copy_in(y_gm, [64, 0], [64, 32])
-            result = asctile.concat(input_a, input_b)  # shape: [128, 32]
+            result = asctile.concat(input_a, input_b, dim=0)  # shape: [128, 32]
+
+        Concatenate two ``L0C`` tensors along the second dimension after the matrix multiplication: ::
+
+            matmul_a = input_a1 @ input_a2          # example shape: [32, 64]
+            matmul_b = input_b1 @ input_b2          # example shape: [32, 128]
+            result = asctile.concat(c1, c2, dim=1)  # result shape:  [32, 192]
 
         Concatenate multiple tensors: ::
 
             tensors = [asctile.copy_in(x_gm, [0, 0], [32, 16]), asctile.copy_in(x_gm, [32, 0], [16, 16]),
                        asctile.copy_in(x_gm, [64, 0], [8, 16]), asctile.maximum(input_a, input_b)]
-            result = asctile.concat(*tensors)  # shape: [120, 16]
+            result = asctile.concat(*tensors, dim=0)  # shape: [120, 16]
     """
+    inputs = tuple(inputs[0]) if len(inputs) == 1 and isinstance(inputs[0], Iterable) else inputs
+    if dim not in (0, 1):
+        raise ValueError("'dim' argument is only allowed to be 0, 1")
     if not inputs or not all(isinstance(inp, LocalTensor) for inp in inputs):
         raise TypeError("All input arguments must be tensors")
-    same_shape = inputs[0].shape[1:]
-    if not all(inp.shape[1:] == same_shape for inp in inputs):
-        raise RuntimeError("All tensors must have the same shape except their first dimension")
+    if any(inp.rank <= dim for inp in inputs):
+        raise RuntimeError(f"All tensors must have at least rank {dim + 1}")
+    pre_shape = inputs[0].shape[:dim]
+    post_shape = inputs[0].shape[dim + 1:]
+    if not all(inp.shape[:dim] == pre_shape and inp.shape[dim + 1:] == post_shape for inp in inputs):
+        raise RuntimeError(f"All tensors must have the same shape except their dimension {dim}")
     dtype = inputs[0].dtype
     if not all(inp.dtype == dtype for inp in inputs):
         raise RuntimeError("All tensors must have the same dtype")
@@ -339,8 +356,8 @@ def concat(*inputs: LocalTensor) -> LocalTensor:
         dtype.sizeof()
     except ValueError:
         raise RuntimeError("LocalTensor dtype size must fit an integer number of bytes")
-    result_shape = [sum(inp.shape[0] for inp in inputs), *same_shape]
-    inputs = [cast_loc(tensor, TensorLocation.UB) for tensor in inputs]
-    ir_type = asctile.ir.get_asctile_LocalTensorType(result_shape, dtype.to_ir(), TensorLocation.UB)
-    handle = global_builder.get_ir_builder().create_tensor_ConcatOp(ir_type, 0, [inp.to_ir() for inp in inputs])
-    return cast_loc(LocalTensor(handle))
+    result_shape = [*pre_shape, sum(inp.shape[dim] for inp in inputs), *post_shape]
+    inputs = [cast_loc(tensor) for tensor in inputs]
+    ir_type = asctile.ir.get_asctile_LocalTensorType(result_shape, dtype.to_ir(), TensorLocation.Auto)
+    handle = global_builder.get_ir_builder().create_tensor_ConcatOp(ir_type, dim, [inp.to_ir() for inp in inputs])
+    return LocalTensor(handle)

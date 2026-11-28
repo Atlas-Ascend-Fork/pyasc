@@ -7,7 +7,8 @@
 # See LICENSE in the root of the software repository for the full text of the License.
 
 from dataclasses import dataclass
-from typing import Literal, Optional
+from pathlib import Path
+from typing import List, Literal, Optional
 
 from asc._C import ir, passes
 from asc._C.libpyasc import asctile
@@ -63,10 +64,18 @@ class CompileOptions(CompileOptionsBase):
     **This feature is enabled by default** on supported platforms (such as ``Ascend950PR_9599``).
     """
 
-    vf_fusion: bool = False
+    vf_fusion: Literal[0, 1, 2] = 0
     """
     Fuse groups of consecutive vector operations into VF blocks using Ascend C register API.
     This feature may help to eliminate unnecessary memory transfers and improve data locality.
+
+    ===== ======
+    Value Effect
+    ===== ======
+    ``0`` Disable the feature (default)
+    ``1`` Enable the feature, use a legacy implementation (recommended)
+    ``2`` Enable the feature, use a modern implementation
+    ===== ======
     """
 
 
@@ -79,8 +88,17 @@ class Compiler(CompilerBase):
             raise RuntimeError(f"'cv_ratio' is only allowed to be 1, 2 for the {self.arch} architecture")
         if self.options.reuse_alloc not in (0, 1, 2):
             raise RuntimeError("'reuse_alloc' is only allowed to be 0, 1, 2")
+        if self.options.vf_fusion not in (0, 1, 2):
+            raise RuntimeError("'vf_fusion' is only allowed to be 0, 1, 2")
         if self.options.vf_fusion and self.arch != CompilationArch.C310:
             raise RuntimeError(f"VF fusion is not supported for the {self.arch} architecture")
+
+    def _get_compiler_cmd(self, arch: str, src_path: Path, dst_path: Path, common_options: List[str]) -> List[str]:
+        compile_cmds = super()._get_compiler_cmd(arch, src_path, dst_path, common_options)
+        bisheng_vf_fusion_set = any(arg.startswith("--cce-simd-vf-fusion=") for arg in compile_cmds)
+        if not bisheng_vf_fusion_set:
+            compile_cmds += ["--cce-simd-vf-fusion=false"]
+        return compile_cmds
 
     def preprocess_module(self, mod: ir.ModuleOp) -> None:
         super().preprocess_module(mod)
@@ -101,6 +119,8 @@ class Compiler(CompilerBase):
         passes.common.add_canonicalizer(pm)
         passes.common.add_reconcile_unrealized_casts(pm)
         asctile.passes.asctile.add_resolve_auto_location(pm)
+        if arch_c310:
+            asctile.passes.asctile.add_unscalarize_reduction(pm)
         passes.common.add_canonicalizer(pm)
         passes.common.add_cse(pm)
         asctile.passes.asctile.add_location_cast_to_copy(pm)
@@ -124,7 +144,6 @@ class Compiler(CompilerBase):
         asctile.passes.asctile.add_mark_reuse_source(pm)
         if arch_c310:
             asctile.passes.asctile.add_vector_transpose_to_load_store(pm)
-            asctile.passes.asctile.add_unscalarize_reduction(pm)
             passes.common.add_canonicalizer(pm)
             passes.common.add_cse(pm)
         asctile.passes.asctile.add_replace_fp8_ops(pm)
@@ -132,6 +151,41 @@ class Compiler(CompilerBase):
         asctile.passes.asctile.add_merge_cv_groups(pm)
         if not self.options.debug:
             asctile.passes.ascendc.add_remove_debug_ops(pm)
+        if self.options.vf_fusion == 2:
+            asctile.passes.ascvf2.add_outline_vf_group(pm)
+            passes.common.add_canonicalizer(pm)
+            asctile.passes.ascvf2.add_shrink_vf_signature(pm)
+            asctile.passes.ascvf2.add_vectorize(pm)
+            asctile.passes.ascvf2.add_reorder_grouped_ops(pm)
+            asctile.passes.affine.add_affine_loop_normalize(pm, promote_single_iter=True)
+            asctile.passes.affine.add_affine_loop_fusion(pm)
+            passes.common.add_canonicalizer(pm)
+            passes.common.add_cse(pm)
+            passes.common.add_licm(pm)
+            asctile.passes.affine.add_simplify_affine_structures(pm)
+            asctile.passes.ascvf2.add_fuse_vf_loops(pm)
+            asctile.passes.affine.add_affine_loop_coalescing(pm)
+            passes.common.add_canonicalizer(pm)
+            asctile.passes.ascvf2.add_fuse_vf_loops(pm)
+            passes.common.add_cse(pm)
+            asctile.passes.ascvf2.add_promote_mem_to_reg(pm)
+            asctile.passes.ascvf2.add_drop_dead_write(pm)
+            asctile.passes.ascvf2.add_merge_into_transfer(pm)
+            asctile.passes.ascvf2.add_insert_vf_sync(pm)
+            asctile.passes.affine.add_simplify_affine_structures(pm)
+            asctile.passes.affine.add_affine_expand_index_ops(pm)
+            asctile.passes.affine.add_lower_affine(pm)
+            passes.common.add_canonicalizer(pm)
+            passes.common.add_cse(pm)
+            asctile.passes.ascvf2.add_lower_to_reg(pm)
+            asctile.passes.ascvf2.add_hoist_reg_tensor(pm)
+            asctile.passes.ascvf2.add_bufferize_loop_result(pm)
+            passes.common.add_canonicalizer(pm)
+            passes.common.add_cse(pm)
+            asctile.passes.ascvf2.add_reuse_reg_tensor(pm)
+            asctile.passes.ascvf2.add_expand_simple_mask_reg(pm)
+            passes.common.add_inliner(pm)
+            passes.common.add_symbol_dce(pm)
         asctile.passes.asclower.add_expand_math(pm)
         asctile.passes.asclower.add_redress_i1_tensor(pm)
         asctile.passes.asclower.add_lower_arith(pm)
@@ -144,7 +198,10 @@ class Compiler(CompilerBase):
         asctile.passes.asclower.add_lower_scf(pm)
         asctile.passes.asclower.add_lower_tensor(pm)
         asctile.passes.asclower.add_displace_concat(pm)
+        asctile.passes.ascvf2.add_legalize_vf_group(pm)
         passes.common.add_canonicalizer(pm)
+        asctile.passes.ascvf2.add_assign_vf_group_tensors(pm)
+        asctile.passes.ascvf2.add_raise_vf_for(pm)
         asctile.passes.asclower.add_realize_conversion_cast(pm)
         asctile.passes.asclower.add_expand_mask(pm)
         asctile.passes.ascendc.add_promote_cv_block(pm)
@@ -160,7 +217,7 @@ class Compiler(CompilerBase):
         passes.ascendc.add_hoist_tensor_allocation(pm, exclude_in_out=not arch_c310)
         asctile.passes.ascendc.add_refine_cube_position(pm)
         passes.common.add_canonicalizer(pm)
-        if self.options.vf_fusion:
+        if self.options.vf_fusion == 1:
             asctile.passes.ascvf.add_promote_cast_ops(pm)
             asctile.passes.ascvf.add_find_vf_group(pm)
             asctile.passes.ascvf.add_canonicalize_vf_group(pm)
@@ -175,7 +232,7 @@ class Compiler(CompilerBase):
             asctile.passes.ascendc.add_reuse_ub_allocation(pm, reuse_in_out=False)
         elif self.options.reuse_alloc == 2:
             asctile.passes.ascendc.add_reuse_tensor_allocation(pm)
-        if self.options.vf_fusion:
+        if self.options.vf_fusion == 1:
             asctile.passes.ascvf.add_materialize_load_store(pm)
         asctile.passes.ascendc.add_dispatch_alloc(pm)
         asctile.passes.ascendc.add_unify_bias_tensor(pm)
@@ -195,12 +252,12 @@ class Compiler(CompilerBase):
                 asctile.passes.ascendc.add_insert_bufid_sync(pm)
                 asctile.passes.ascendc.add_insert_bias_bufid_sync(pm)
                 passes.common.add_canonicalizer(pm)
-                asctile.passes.ascendc.add_fuse_bufid_sync(pm)
             else:
                 passes.ascendc.add_insert_que_sync(pm)
             passes.ascendc.add_unify_pipe(pm)
             passes.common.add_canonicalizer(pm)
         asctile.passes.ascvf.add_inline_vf_group(pm)
+        asctile.passes.ascvf2.add_wrap_vec_scope(pm)
         passes.ascendc.add_declare_py_struct(pm)
         passes.ascendc.add_generate_boilerplate(pm)
         if self.options.cv_ratio == 1:

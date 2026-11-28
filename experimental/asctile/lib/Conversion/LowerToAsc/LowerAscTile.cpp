@@ -491,10 +491,17 @@ struct ConvertReduce : ConvertOp<asctile::ReduceOp> {
     }
 
     static std::pair<SmallVector<int64_t>, std::optional<ascendc::ReducePattern>> getReductionParams(
-        ArrayRef<int64_t> tensorShape, ArrayRef<int64_t> dims)
+        ArrayRef<int64_t> tensorShapeRef, ArrayRef<int64_t> dimsRef)
     {
+        SmallVector<int64_t> tensorShape{tensorShapeRef};
+        SmallVector<int64_t> dims{dimsRef};
         if (tensorShape.empty() || dims.empty())
             return {};
+        if (tensorShape.size() == 1) {
+            tensorShape.insert(tensorShape.begin(), 1);
+            for (auto& dim : dims)
+                ++dim;
+        }
         SmallVector<bool> reduceDims(tensorShape.size(), false);
         for (auto dim : dims)
             reduceDims[dim] = true;

@@ -85,7 +85,7 @@ ascendc::LocalTensorType getType(Operation* op)
         })
         .Case<
             ascendc::ReduceMaxL2Op, ascendc::ReduceMinL2Op, ascendc::ReduceSumL2Op, ascendc::ReduceSumOp,
-            ascendc::ReduceMaxOp>([](auto op) {
+            ascendc::ReduceMaxOp, ascendc::ReduceMinOp>([](auto op) {
             auto type = dyn_cast<ascendc::LocalTensorType>(op.getSrc().getType());
             assert(type);
             return type;
@@ -219,8 +219,8 @@ ValueVector getOutputLocalTensors(ArrayRef<Operation*> group)
             .Case<
                 ascendc::BinaryL2Op, ascendc::UnaryL2Op, ascendc::VecScalarL2Op, ascendc::ReduceMaxL2Op,
                 ascendc::ReduceMinL2Op, ascendc::ReduceSumL2Op, ascendc::ReduceSumOp, ascendc::ReduceMaxOp,
-                ascendc::DuplicateL2Op, ascendc::BroadcastOp, ascendc::CompareScalarL2Op, ascendc::SelectL2Op>(
-                [&](auto op) { outputLocalTensors.push_back(op.getDst()); });
+                ascendc::ReduceMinOp, ascendc::DuplicateL2Op, ascendc::BroadcastOp, ascendc::CompareScalarL2Op,
+                ascendc::SelectL2Op>([&](auto op) { outputLocalTensors.push_back(op.getDst()); });
     }
     return ascvf::deduplicate(outputLocalTensors);
 }
@@ -232,7 +232,7 @@ SmallVector<int64_t> getSplitPosition(Operation* op)
             ascendc::BinaryL2Op, ascendc::UnaryL2Op, ascendc::VecScalarL2Op, ascendc::ReduceMaxL2Op,
             ascendc::ReduceMinL2Op, ascendc::ReduceSumL2Op, ascendc::DuplicateL2Op, ascendc::CompareScalarL2Op,
             ascendc::SelectL2Op>([](auto) { return SmallVector<int64_t>{}; })
-        .Case<ascendc::ReduceSumOp, ascendc::ReduceMaxOp, ascendc::BroadcastOp>(
+        .Case<ascendc::ReduceSumOp, ascendc::ReduceMaxOp, ascendc::ReduceMinOp, ascendc::BroadcastOp>(
             [](auto op) { return llvm::to_vector(llvm::seq<int64_t>(1, op.getSrc().getType().getRank())); });
 }
 

@@ -59,7 +59,7 @@ std::optional<int64_t> getConstantTripCount(scf::ForOp forOp)
     int64_t lbCst = lbCstOp.value();
     int64_t ubCst = ubCstOp.value();
     int64_t stepCst = stepCstOp.value();
-    assert(lbCst >= 0 && ubCst >= 0 && stepCst > 0 && "expected positive loop bounds and step");
+    assert(lbCst >= 0 && ubCst >= 0 && stepCst > 0 && "expected non-negative loop bounds and positive step");
     return llvm::divideCeilSigned(ubCst - lbCst, stepCst);
 }
 
@@ -85,7 +85,7 @@ void generateUnrolledLoop(
             annotateFn(i, clonedOp, builder);
         }
         for (unsigned i = 0, e = lastYielded.size(); i < e; i++)
-            lastYielded[i] = operandMap.lookup(yieldedValues[i]);
+            lastYielded[i] = operandMap.lookupOrDefault(yieldedValues[i]);
     }
     for (auto it = loopBodyBlock->begin(); it != std::next(srcBlockEnd); it++)
         annotateFn(0, &*it, builder);

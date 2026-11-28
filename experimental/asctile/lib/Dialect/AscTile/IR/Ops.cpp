@@ -174,6 +174,8 @@ LogicalResult CopyOp::verify()
         return emitOpError() << "'distrib' mode " << stringifyDistribMode(*distrib)
                              << " is only supported when copying from L0C to UB";
     }
+    if (srcLoc == TensorLocation::UB && dstLoc == TensorLocation::UB)
+        return emitOpError() << "'distrib' is not supported when copying from UB to UB";
     return success();
 }
 

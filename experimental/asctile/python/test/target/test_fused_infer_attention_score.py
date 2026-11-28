@@ -128,12 +128,26 @@ def flash_attention_pyasc(q_ptr: asctile.GlobalAddress, k_ptr: asctile.GlobalAdd
             asctile.copy_out(update.to(dtype), o_gm, [q_row, 0])
 
 
-def flash_attention_torch_reference(q, k, v, N, N_kv, scale):
-    q_ref = q.to(torch.float32)  # [B, N, S1, D]
-    k_ref = k.to(torch.float32).repeat_interleave(N // N_kv, dim=1)  # [B, N_kv, S2, D]
-    v_ref = v.to(torch.float32).repeat_interleave(N // N_kv, dim=1)  # [B, N_kv, S2, D]
-    return torch.nn.functional.scaled_dot_product_attention(q_ref, k_ref, v_ref, scale=scale, is_causal=False,
-                                                            dropout_p=0.0)
+def flash_attention_torch_reference(q, k, v, scale):
+    # This reference requires much less memory for input tensors initialization
+    # than torch.nn.functional.scaled_dot_product_attention.
+    B, N, S1, D = q.shape
+    N_kv = k.shape[1]
+    N_repeats = N // N_kv
+    o_ref = torch.zeros(B, N, S1, D, dtype=torch.float32)
+    for b in range(B):
+        q_b = q[b].to(torch.float32)  # [N, S1, D]
+        for kv_head in range(N_kv):
+            # All query heads [lo:hi] share this kv head (repeat_interleave).
+            lo = kv_head * N_repeats
+            hi = lo + N_repeats
+            q_slice = q_b[lo:hi]  # [N_repeats, S1, D]
+            k_b = k[b, kv_head].to(torch.float32)  # [S2, D]
+            v_b = v[b, kv_head].to(torch.float32)  # [S2, D]
+            scores = torch.matmul(q_slice, k_b.T) * scale  # [N_repeats, S1, S2]
+            p = torch.softmax(scores, dim=-1)  # [N_repeats, S1, S2]
+            o_ref[b, lo:hi] = torch.matmul(p, v_b)  # [N_repeats, S1, D]
+    return o_ref
 
 
 # Q: [B, S1, N, D]
@@ -206,6 +220,6 @@ def test_flash_attention_score(profiler, runs, block_num, input_shapes, torch_dt
                                              step1, step2, g_group, s2_unroll, mm1_K_step, mm2_K_step, kv_cache)
     if compile_only:
         return
-    o_ref = flash_attention_torch_reference(q, k, v, N, N_kv, scale_factor)
+    o_ref = flash_attention_torch_reference(q, k, v, scale_factor)
     o_ref = o_ref.to(torch_dtype)
     torch.testing.assert_close(o, o_ref, atol=1e-2, rtol=1e-2)

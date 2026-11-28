@@ -1361,6 +1361,35 @@ func.func @lower_reindex_2d_src(%arg0: tensor<4x8xf32, #asctile.local<UB>>, %arg
   return %0 : tensor<8xf32, #asctile.local<UB>>
 }
 
+// CHECK-LABEL: func.func @lower_copy_ub_to_ub_continuous(%arg0: tensor<128xf32, #asctile.local<UB>>) -> tensor<128xf32, #asctile.local<UB>> {
+// CHECK:       %0 = builtin.unrealized_conversion_cast %arg0 : tensor<128xf32, #asctile.local<UB>> to !ascendc.local_tensor<128xf32>
+// CHECK-NEXT:  %1 = ascendc.local_tensor_auto veccalc() : <128xf32>
+// CHECK-NEXT:  ascendc.data_copy_l2 %1, %0, %c128_i32 {direction = #ascendc.copy_direction<veccalc, veccalc>} : !ascendc.local_tensor<128xf32>, !ascendc.local_tensor<128xf32>, i32
+// CHECK-NEXT:  %2 = builtin.unrealized_conversion_cast %1 : !ascendc.local_tensor<128xf32> to tensor<128xf32, #asctile.local<UB>>
+// CHECK-NEXT:  return %2 : tensor<128xf32, #asctile.local<UB>>
+// CHECK-NEXT:}
+func.func @lower_copy_ub_to_ub_continuous(%arg0: tensor<128xf32, #asctile.local<UB>>) -> tensor<128xf32, #asctile.local<UB>> {
+  %c0_i32 = arith.constant 0 : i32
+  %0 = asctile.copy %arg0[%c0_i32] : tensor<128xf32, #asctile.local<UB>>, tensor<128xf32, #asctile.local<UB>>
+  return %0 : tensor<128xf32, #asctile.local<UB>>
+}
+
+// CHECK-LABEL: func.func @lower_copy_ub_to_ub_strided(%arg0: tensor<4x128xbf16, #asctile.local<UB>>) -> tensor<4x64xbf16, #asctile.local<UB>> {
+// CHECK:       %0 = builtin.unrealized_conversion_cast %arg0 : tensor<4x128xbf16, #asctile.local<UB>> to !ascendc.local_tensor<4x128xbf16>
+// CHECK-NEXT:  %1 = ascendc.local_tensor_auto veccalc() : <4x64xbf16>
+// CHECK-NEXT:  %2 = ascendc.local_tensor.subindex %0[%c64_i32] : !ascendc.local_tensor<4x128xbf16>, i32, !ascendc.local_tensor<4x128xbf16>
+// CHECK-NEXT:  %3 = ascendc.construct !ascendc.data_copy_params(%c4_i32, %c4_i32, %c4_i32, %c0_i32) : i32, i32, i32, i32
+// CHECK-NEXT:  ascendc.data_copy_l2 %1, %2, %3 {direction = #ascendc.copy_direction<veccalc, veccalc>} : !ascendc.local_tensor<4x64xbf16>, !ascendc.local_tensor<4x128xbf16>, !ascendc.data_copy_params
+// CHECK-NEXT:  %4 = builtin.unrealized_conversion_cast %1 : !ascendc.local_tensor<4x64xbf16> to tensor<4x64xbf16, #asctile.local<UB>>
+// CHECK-NEXT:  return %4 : tensor<4x64xbf16, #asctile.local<UB>>
+// CHECK-NEXT:}
+func.func @lower_copy_ub_to_ub_strided(%arg0: tensor<4x128xbf16, #asctile.local<UB>>) -> tensor<4x64xbf16, #asctile.local<UB>> {
+  %c0_i32 = arith.constant 0 : i32
+  %c64_i32 = arith.constant 64 : i32
+  %0 = asctile.copy %arg0[%c0_i32, %c64_i32] : tensor<4x128xbf16, #asctile.local<UB>>, tensor<4x64xbf16, #asctile.local<UB>>
+  return %0 : tensor<4x64xbf16, #asctile.local<UB>>
+}
+
 // -----
 
 module attributes {ascendc.cv_ratio = 2 : i64} {

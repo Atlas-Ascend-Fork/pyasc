@@ -64,7 +64,7 @@ for i in asctile.range(huge_loop_count, ...):
 
 ```python
 # Good: all tiling params are ConstExpr → static, optimized code
-@asctile.jit(static_alloc=True, reuse_alloc=1)
+@asctile.jit(static_alloc=True, reuse_alloc=2)
 def kernel(input_ptr: asctile.GlobalAddress, output_ptr: asctile.GlobalAddress,
            input_length: asctile.ConstExpr, tile_length: asctile.ConstExpr,
            unroll_factor: asctile.ConstExpr):

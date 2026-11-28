@@ -9,3 +9,4 @@
 add_subdirectory(AscendC)
 add_subdirectory(AscTile)
 add_subdirectory(AscVF)
+add_subdirectory(AscVF2)

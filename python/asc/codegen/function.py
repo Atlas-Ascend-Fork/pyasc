@@ -12,10 +12,11 @@ import re
 import textwrap
 import hashlib
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar, get_args, get_origin
+from typing import Any, Callable, Dict, Generic, List, Optional, Set, Tuple, TypeVar, get_args, get_origin
 from typing_extensions import ParamSpec
 
 from asc.language.core.constexpr import ConstExpr, require_constexpr
+from asc.common.compat import get_annotations
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -146,6 +147,20 @@ class Function(Generic[P, T]):
             else:
                 runtime_args[name] = value
         return runtime_args, constexprs
+
+    def get_constexpr_args(self) -> Set[str]:
+        annotations = get_annotations(self.fn)
+        constexpr_args = set()
+        for name in inspect.signature(self.fn).parameters:
+            annotation = annotations.get(name, object)
+            annotation_origin = get_origin(annotation)
+            if annotation_origin is not None:
+                is_constexpr = issubclass(annotation_origin, ConstExpr)
+            else:
+                is_constexpr = isinstance(annotation, type) and issubclass(annotation, ConstExpr)
+            if is_constexpr:
+                constexpr_args.add(name)
+        return constexpr_args
 
     def compute_globals(self) -> Dict[str, Any]:
         globals = self.fn.__globals__

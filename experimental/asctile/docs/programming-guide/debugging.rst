@@ -78,11 +78,27 @@ These run during JIT compilation, before the kernel runs, and work without any h
    :no-index:
 
 
+Interpreter mode
+----------------
+
+AscTile can execute kernels in an interpreter mode: instead of compiling them to Ascend C and launching on the NPU or
+the simulator, the kernel body runs as regular Python code with CPU backend.
+`Python debugging <https://docs.python.org/3/library/pdb.html>`__ (``pdb``, ``breakpoint()``, IDE integrations, etc.)
+works directly inside the kernel, and every ``asctile.LocalTensor`` is backed by a NumPy array. Nothing is compiled, so
+neither the Bisheng compiler nor NPU hardware is required.
+
+The mode is enabled with the ``ASCTILE_INTERPRET=1`` environment variable, set **before the Python process starts**:
+
+.. code-block:: bash
+
+   ASCTILE_INTERPRET=1 python3 my_kernel.py
+
+
 Environment variables
 ---------------------
 
-These environment variables complement the debug operations and control what the toolchain keeps on
-disk and whether a compiled kernel is actually launched.
+``ASCTILE_INTERPRET=1`` (optional)
+    execute kernels with the interpreter instead of compiling and launching them (see `Interpreter mode`_)
 
 ``PYASC_DUMP_PATH=<dir>`` (optional)
     directory where the compiler keeps generated artifacts: intermediate IR (``.mlir``), Ascend C source

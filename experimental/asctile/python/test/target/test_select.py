@@ -15,7 +15,7 @@ import torch
 from .helpers import parametrize_is_static
 
 
-@asctile.jit(reuse_alloc=1)
+@asctile.jit(reuse_alloc=2)
 def select(cond_ptr: asctile.GlobalAddress, input_x_ptr: asctile.GlobalAddress, input_y_ptr: asctile.GlobalAddress,
            output_ptr: asctile.GlobalAddress, input_length, tile_length: asctile.ConstExpr,
            unroll_factor: asctile.ConstExpr, l2_cache: asctile.ConstExpr):
@@ -40,45 +40,45 @@ def select(cond_ptr: asctile.GlobalAddress, input_x_ptr: asctile.GlobalAddress, 
 
 # yapf: disable
 @parametrize_is_static()
-@pytest.mark.parametrize("test_name, block_num, input_shapes, input_dtypes, output_shapes, output_dtypes, compile_params, runtime_params, tiling_key, tiling_params", [
+@pytest.mark.parametrize("block_num, input_shapes, input_dtypes, output_shapes, output_dtypes, compile_params, runtime_params, tiling_key, tiling_params", [
 # PYASC_TESTS_BEGIN
-    ("select_test_1", 40, ([2048, 1, 30], [2048, 1, 30], [2048, 1, 30]), (torch.int8, torch.float32, torch.float32), ([2048, 1, 30], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (61440, 768, 40, 0)),
-    ("select_test_2", 2, ([2048], [2048], [2048]), (torch.int8, torch.float32, torch.float32), ([2048], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (2048, 512, 2, 0)),
-    ("select_test_3", 5, ([4608], [4608], [4608]), (torch.int8, torch.float32, torch.float32), ([4608], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (4608, 512, 5, 0)),
-    ("select_test_4", 36, ([3072, 12], [3072, 12], [3072, 12]), (torch.int8, torch.int32, torch.int32), ([3072, 12], ), (torch.int32, ), ((True, True, True, True), ), (2, ), 8, (36864, 512, 36, 0)),
-    ("select_test_5", 32, ([1024, 4, 8], [1024, 4, 8], [1024, 4, 8]), (torch.int8, torch.float32, torch.float32), ([1024, 4, 8], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (32768, 512, 32, 0)),
-    ("select_test_6", 10, ([9600], [9600], [9600]), (torch.int8, torch.int32, torch.int32), ([9600], ), (torch.int32, ), ((True, True, True, True), ), (2, ), 8, (9600, 512, 10, 0)),
-    ("select_test_7", 3, ([3000], [3000], [3000]), (torch.int8, torch.float32, torch.float32), ([3000], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (3000, 512, 3, 0)),
-    ("select_test_8", 36, ([4608, 12], [4608, 12], [4608, 12]), (torch.int8, torch.int32, torch.int32), ([4608, 12], ), (torch.int32, ), ((True, True, True, True), ), (2, ), 8, (55296, 768, 36, 0)),
-    ("select_test_9", 5, ([4800], [4800], [4800]), (torch.int8, torch.float32, torch.float32), ([4800], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (4800, 512, 5, 0)),
-    ("select_test_10", 3, ([3072], [3072, 1], [3072, 1]), (torch.int8, torch.bfloat16, torch.bfloat16), ([3072, 1], ), (torch.bfloat16, ), ((True, True, True, True), ), (2, ), 8, (3072, 512, 3, 0)),
-    ("select_test_11", 16, ([128, 1, 128], [128, 1, 128], [128, 1, 128]), (torch.int8, torch.float32, torch.float32), ([128, 1, 128], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (16384, 512, 16, 0)),
-    ("select_test_12", 7, ([7000, 1], [7000, 1], [7000, 1]), (torch.int8, torch.int32, torch.int32), ([7000, 1], ), (torch.int32, ), ((True, True, True, True), ), (2, ), 8, (7000, 512, 7, 0)),
-    ("select_test_13", 1, ([16, 64], [16, 64], [16, 64]), (torch.int8, torch.float32, torch.float32), ([16, 64], ), (torch.float32, ), ((False, False, False, True), ), (2, ), 8, (1024, 512, 1, 0)),
-    ("select_test_14", 2, ([16, 128], [16, 128], [16, 128]), (torch.int8, torch.float32, torch.float32), ([16, 128], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (2048, 512, 2, 0)),
-    ("select_test_15", 2, ([1500], [1500], [1500]), (torch.int8, torch.float32, torch.float32), ([1500], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (1500, 512, 2, 0)),
-    ("select_test_16", 40, ([1024, 50], [1024, 50], [1024, 50]), (torch.int8, torch.float32, torch.float32), ([1024, 50], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (51200, 640, 40, 0)),
-    ("select_test_17", 25, ([256, 1, 100], [256, 1, 100], [256, 1, 100]), (torch.int8, torch.float32, torch.float32), ([256, 1, 100], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (25600, 512, 25, 0)),
-    ("select_test_18", 2, ([1200], [1200, 1], [1200, 1]), (torch.int8, torch.float32, torch.float32), ([1200, 1], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (1200, 512, 2, 0)),
-    ("select_test_19", 69, ([4800, 1, 300], [4800, 1, 300], [4800, 1, 300]), (torch.int8, torch.float32, torch.float32), ([4800, 1, 300], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (1440000, 7040, 69, 0)),
-    ("select_test_20", 43, ([128, 512], [128, 512], [128, 512]), (torch.int8, torch.float16, torch.float16), ([128, 512], ), (torch.float16, ), ((False, False, False, True), ), (2, ), 8, (65536, 768, 43, 0)),
-    ("select_test_21", 40, ([7000, 1, 10], [7000, 1, 10], [7000, 1, 10]), (torch.int8, torch.float32, torch.float32), ([7000, 1, 10], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (70000, 896, 40, 0)),
-    ("select_test_22", 59, ([128, 100, 64], [128, 100, 64], [128, 100, 64]), (torch.int8, torch.float32, torch.float32), ([128, 100, 64], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (819200, 7040, 59, 0)),
-    ("select_test_23", 40, ([2048, 1, 60], [2048, 1, 60], [2048, 1, 60]), (torch.int8, torch.bfloat16, torch.bfloat16), ([2048, 1, 60], ), (torch.bfloat16, ), ((True, True, True, True), ), (2, ), 8, (122880, 1536, 40, 0)),
-    ("select_test_24", 38, ([1024, 4, 40], [1024, 4, 40], [1024, 4, 40]), (torch.int8, torch.float32, torch.float32), ([1024, 4, 40], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (163840, 2176, 38, 0)),
-    ("select_test_25", 59, ([1024, 4, 300], [1024, 4, 300], [1024, 4, 300]), (torch.int8, torch.float32, torch.float32), ([1024, 4, 300], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (1228800, 7040, 59, 0)),
-    ("select_test_26", 38, ([2400, 4, 8], [2400, 4, 8], [2400, 4, 8]), (torch.int8, torch.float32, torch.float32), ([2400, 4, 8], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (76800, 1024, 38, 0)),
-    ("select_test_27", 37, ([1024, 100], [1024, 100], [1024, 100]), (torch.int8, torch.float32, torch.float32), ([1024, 100], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (102400, 1408, 37, 0)),
-    ("select_test_28", 37, ([2400, 4, 40], [2400, 4, 40], [2400, 4, 40]), (torch.int8, torch.float32, torch.float32), ([2400, 4, 40], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (384000, 5248, 37, 0)),
-    ("select_test_29", 72, ([1024, 100, 64], [1024, 100, 64], [1024, 100, 64]), (torch.int8, torch.float32, torch.float32), ([1024, 100, 64], ), (torch.float32, ), ((False, False, False, True), ), (2, ), 8, (6553600, 7040, 72, 0)),
-    ("select_test_30", 72, ([1500, 1000], [1500, 1000], [1500, 1000]), (torch.int8, torch.float32, torch.float32), ([1500, 1000], ), (torch.float32, ), ((False, False, False, True), ), (2, ), 8, (1500000, 7040, 72, 0)),
-    ("select_test_31", 71, ([512, 200, 200], [512, 200, 200], [512, 200, 200]), (torch.int8, torch.float32, torch.float32), ([512, 200, 200], ), (torch.float32, ), ((False, False, False, True), ), (2, ), 8, (20480000, 7040, 71, 0)),
-    ("select_test_32", 70, ([256, 200, 200], [256, 200, 200], [256, 200, 200]), (torch.int8, torch.float32, torch.float32), ([256, 200, 200], ), (torch.float32, ), ((False, False, False, True), ), (2, ), 8, (10240000, 7040, 70, 0)),
+    pytest.param(40, ([2048, 1, 30], [2048, 1, 30], [2048, 1, 30]), (torch.int8, torch.float32, torch.float32), ([2048, 1, 30], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (61440, 768, 40, 0), id="select_test_1"),
+    pytest.param(2, ([2048], [2048], [2048]), (torch.int8, torch.float32, torch.float32), ([2048], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (2048, 512, 2, 0), id="select_test_2"),
+    pytest.param(5, ([4608], [4608], [4608]), (torch.int8, torch.float32, torch.float32), ([4608], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (4608, 512, 5, 0), id="select_test_3"),
+    pytest.param(36, ([3072, 12], [3072, 12], [3072, 12]), (torch.int8, torch.int32, torch.int32), ([3072, 12], ), (torch.int32, ), ((True, True, True, True), ), (2, ), 8, (36864, 512, 36, 0), id="select_test_4"),
+    pytest.param(32, ([1024, 4, 8], [1024, 4, 8], [1024, 4, 8]), (torch.int8, torch.float32, torch.float32), ([1024, 4, 8], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (32768, 512, 32, 0), id="select_test_5"),
+    pytest.param(10, ([9600], [9600], [9600]), (torch.int8, torch.int32, torch.int32), ([9600], ), (torch.int32, ), ((True, True, True, True), ), (2, ), 8, (9600, 512, 10, 0), id="select_test_6"),
+    pytest.param(3, ([3000], [3000], [3000]), (torch.int8, torch.float32, torch.float32), ([3000], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (3000, 512, 3, 0), id="select_test_7"),
+    pytest.param(36, ([4608, 12], [4608, 12], [4608, 12]), (torch.int8, torch.int32, torch.int32), ([4608, 12], ), (torch.int32, ), ((True, True, True, True), ), (2, ), 8, (55296, 768, 36, 0), id="select_test_8"),
+    pytest.param(5, ([4800], [4800], [4800]), (torch.int8, torch.float32, torch.float32), ([4800], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (4800, 512, 5, 0), id="select_test_9"),
+    pytest.param(3, ([3072], [3072, 1], [3072, 1]), (torch.int8, torch.bfloat16, torch.bfloat16), ([3072, 1], ), (torch.bfloat16, ), ((True, True, True, True), ), (2, ), 8, (3072, 512, 3, 0), id="select_test_10"),
+    pytest.param(16, ([128, 1, 128], [128, 1, 128], [128, 1, 128]), (torch.int8, torch.float32, torch.float32), ([128, 1, 128], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (16384, 512, 16, 0), id="select_test_11"),
+    pytest.param(7, ([7000, 1], [7000, 1], [7000, 1]), (torch.int8, torch.int32, torch.int32), ([7000, 1], ), (torch.int32, ), ((True, True, True, True), ), (2, ), 8, (7000, 512, 7, 0), id="select_test_12"),
+    pytest.param(1, ([16, 64], [16, 64], [16, 64]), (torch.int8, torch.float32, torch.float32), ([16, 64], ), (torch.float32, ), ((False, False, False, True), ), (2, ), 8, (1024, 512, 1, 0), id="select_test_13"),
+    pytest.param(2, ([16, 128], [16, 128], [16, 128]), (torch.int8, torch.float32, torch.float32), ([16, 128], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (2048, 512, 2, 0), id="select_test_14"),
+    pytest.param(2, ([1500], [1500], [1500]), (torch.int8, torch.float32, torch.float32), ([1500], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (1500, 512, 2, 0), id="select_test_15"),
+    pytest.param(40, ([1024, 50], [1024, 50], [1024, 50]), (torch.int8, torch.float32, torch.float32), ([1024, 50], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (51200, 640, 40, 0), id="select_test_16"),
+    pytest.param(25, ([256, 1, 100], [256, 1, 100], [256, 1, 100]), (torch.int8, torch.float32, torch.float32), ([256, 1, 100], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (25600, 512, 25, 0), id="select_test_17"),
+    pytest.param(2, ([1200], [1200, 1], [1200, 1]), (torch.int8, torch.float32, torch.float32), ([1200, 1], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (1200, 512, 2, 0), id="select_test_18"),
+    pytest.param(69, ([4800, 1, 300], [4800, 1, 300], [4800, 1, 300]), (torch.int8, torch.float32, torch.float32), ([4800, 1, 300], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (1440000, 7040, 69, 0), id="select_test_19"),
+    pytest.param(43, ([128, 512], [128, 512], [128, 512]), (torch.int8, torch.float16, torch.float16), ([128, 512], ), (torch.float16, ), ((False, False, False, True), ), (2, ), 8, (65536, 768, 43, 0), id="select_test_20"),
+    pytest.param(40, ([7000, 1, 10], [7000, 1, 10], [7000, 1, 10]), (torch.int8, torch.float32, torch.float32), ([7000, 1, 10], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (70000, 896, 40, 0), id="select_test_21"),
+    pytest.param(59, ([128, 100, 64], [128, 100, 64], [128, 100, 64]), (torch.int8, torch.float32, torch.float32), ([128, 100, 64], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (819200, 7040, 59, 0), id="select_test_22"),
+    pytest.param(40, ([2048, 1, 60], [2048, 1, 60], [2048, 1, 60]), (torch.int8, torch.bfloat16, torch.bfloat16), ([2048, 1, 60], ), (torch.bfloat16, ), ((True, True, True, True), ), (2, ), 8, (122880, 1536, 40, 0), id="select_test_23"),
+    pytest.param(38, ([1024, 4, 40], [1024, 4, 40], [1024, 4, 40]), (torch.int8, torch.float32, torch.float32), ([1024, 4, 40], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (163840, 2176, 38, 0), id="select_test_24"),
+    pytest.param(59, ([1024, 4, 300], [1024, 4, 300], [1024, 4, 300]), (torch.int8, torch.float32, torch.float32), ([1024, 4, 300], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (1228800, 7040, 59, 0), id="select_test_25"),
+    pytest.param(38, ([2400, 4, 8], [2400, 4, 8], [2400, 4, 8]), (torch.int8, torch.float32, torch.float32), ([2400, 4, 8], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (76800, 1024, 38, 0), id="select_test_26"),
+    pytest.param(37, ([1024, 100], [1024, 100], [1024, 100]), (torch.int8, torch.float32, torch.float32), ([1024, 100], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (102400, 1408, 37, 0), id="select_test_27"),
+    pytest.param(37, ([2400, 4, 40], [2400, 4, 40], [2400, 4, 40]), (torch.int8, torch.float32, torch.float32), ([2400, 4, 40], ), (torch.float32, ), ((True, True, True, True), ), (2, ), 8, (384000, 5248, 37, 0), id="select_test_28"),
+    pytest.param(72, ([1024, 100, 64], [1024, 100, 64], [1024, 100, 64]), (torch.int8, torch.float32, torch.float32), ([1024, 100, 64], ), (torch.float32, ), ((False, False, False, True), ), (2, ), 8, (6553600, 7040, 72, 0), id="select_test_29"),
+    pytest.param(72, ([1500, 1000], [1500, 1000], [1500, 1000]), (torch.int8, torch.float32, torch.float32), ([1500, 1000], ), (torch.float32, ), ((False, False, False, True), ), (2, ), 8, (1500000, 7040, 72, 0), id="select_test_30"),
+    pytest.param(71, ([512, 200, 200], [512, 200, 200], [512, 200, 200]), (torch.int8, torch.float32, torch.float32), ([512, 200, 200], ), (torch.float32, ), ((False, False, False, True), ), (2, ), 8, (20480000, 7040, 71, 0), id="select_test_31"),
+    pytest.param(70, ([256, 200, 200], [256, 200, 200], [256, 200, 200]), (torch.int8, torch.float32, torch.float32), ([256, 200, 200], ), (torch.float32, ), ((False, False, False, True), ), (2, ), 8, (10240000, 7040, 70, 0), id="select_test_32"),
 # PYASC_TESTS_END
 ])
 # yapf: enable
-def test_select(profiler, runs, is_static, test_name, block_num, input_shapes, input_dtypes, output_shapes,
-                output_dtypes, compile_params, runtime_params, tiling_key, tiling_params):
+def test_select(profiler, runs, is_static, block_num, input_shapes, input_dtypes, output_shapes, output_dtypes,
+                compile_params, runtime_params, tiling_key, tiling_params):
     input_shape = input_shapes[1]
     dtype = input_dtypes[1]
     tile_length = tiling_params[1]

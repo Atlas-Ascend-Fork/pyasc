@@ -99,23 +99,72 @@ Recommended Skills
 Directory Structure
 -------------------
 
-The ``cannbot-skills`` repository should be cloned as a **sibling directory** to ``pyasc`` (not inside the project).
-Skills are symlinked into ``.opencode/skills/``, the ``ops-code-reviewer`` agents into ``.opencode/agents/``,
-and ``asc-devkit`` is symlinked in the project root.
-All paths use the ``$CANNBOT_SKILLS`` environment variable.
+The ``asc-devkit`` repository is cloned as a **sibling directory** to the project
+(not inside it) and located via the ``$ASC_DEVKIT_DIR`` environment variable (required for both
+installation methods below). With the manual method, the ``cannbot-skills`` repository is also
+cloned as a **sibling directory** and referenced via the ``$CANNBOT_SKILLS`` environment variable;
+skills are then symlinked into ``.agents/skills/``.
 
 
 Installation
 ------------
 
+Prerequisite: asc-devkit
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Several skills (for example ``ascendc-docs-search``) locate local API documentation
+and examples via the ``$ASC_DEVKIT_DIR`` environment variable. Neither installation
+method installs ``asc-devkit``, so clone it as a sibling directory to the project
+and export the variable:
+
 .. code-block:: bash
 
-    # Clone cannbot-skills as sibling to pyasc
-    export CANNBOT_SKILLS=$PWD/../cannbot-skills
-    git clone https://gitcode.com/cann/cannbot-skills.git $CANNBOT_SKILLS
+    # Run from the repository root
+    git clone https://gitcode.com/cann/asc-devkit.git $PWD/../asc-devkit
+    export ASC_DEVKIT_DIR=$(realpath $PWD/../asc-devkit)
+    # Persist the variable in your shell profile with an absolute path
 
-    # Clone asc-devkit (API docs + examples)
-    git clone https://gitcode.com/cann/asc-devkit.git $CANNBOT_SKILLS/plugins-official/ops-direct-invoke/asc-devkit
+Recommended: skills CLI
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The `skills CLI <https://github.com/vercel-labs/skills>`__ (requires Node.js 22.20+)
+installs skills from the ``cannbot-skills`` repository directly:
+
+.. code-block:: bash
+
+    # Run from the repository root
+    # Browse available skills (run without --skill for an interactive picker)
+    npx skills add https://gitcode.com/cann/cannbot-skills.git --list
+
+    # Install the skills from the table above
+    npx skills add https://gitcode.com/cann/cannbot-skills.git \
+        --skill ascendc-api-best-practices --skill ascendc-blaze-best-practice \
+        --skill ascendc-code-review --skill ascendc-crash-debug \
+        --skill ascendc-docs-search --skill ascendc-performance-best-practices \
+        --skill ascendc-perf-optimize --skill ascendc-precision-debug \
+        --skill ascendc-runtime-debug --skill ascendc-tiling-design \
+        --skill npu-arch --skill ascendc-regbase-best-practice \
+        --skill ascendc-sync-audit --skill ops-profiling \
+        --skill ops-simulator --skill ops-precision-standard \
+        --skill aiss-tiling-solver --agent opencode
+
+Skills are installed into ``.agents/skills/``, which OpenCode discovers automatically
+and which is already covered by the ``.agents/`` entry in ``.gitignore``.
+The CLI also creates ``skills-lock.json`` in the project root; exclude it from
+git as shown below.
+
+Alternative: manual symlinks
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: bash
+
+    # Run from the repository root
+    # Clone cannbot-skills as a sibling directory
+    git clone https://gitcode.com/cann/cannbot-skills.git $PWD/../cannbot-skills
+    export CANNBOT_SKILLS=$(realpath $PWD/../cannbot-skills)
+
+    # Create the skills directory (ln does not create missing parent directories)
+    mkdir -p .agents/skills
 
     # Create symlinks
     skills=(
@@ -134,65 +183,53 @@ Installation
         ascendc-sync-audit
         ops-profiling
         ops-simulator
-        aiss-tiling-solver
         ops-precision-standard
     )
     for skill in "${skills[@]}"; do
-        ln -sfn $CANNBOT_SKILLS/ops/$skill .opencode/skills/$skill
+        ln -sfn $CANNBOT_SKILLS/ops/$skill .agents/skills/$skill
     done
-    ln -sfn $CANNBOT_SKILLS/plugins-official/ops-direct-invoke/asc-devkit ./asc-devkit
-
-    # ops-code-reviewer plugin: agent symlinks only (do not overwrite AGENTS.md)
-    mkdir -p .opencode/agents
-    for agent in ascendc-code-summarizer ascendc-ops-reviewer; do
-        ln -sfn $CANNBOT_SKILLS/plugins-official/ops-code-reviewer/agents/$agent.md .opencode/agents/$agent.md
-    done
+    ln -sfn $CANNBOT_SKILLS/community/ops/aiss-tiling-solver .agents/skills/aiss-tiling-solver
 
     # Verify skills installation
-    for s in .opencode/skills/*/; do
+    for s in .agents/skills/*/; do
       [ -f "$s/SKILL.md" ] && echo "OK: $s" || echo "MISSING: $s"
     done
 
 Restart OpenCode to load the skills.
 
-Hiding Symlinks from Git
-~~~~~~~~~~~~~~~~~~~~~~~~
+Ignoring Generated Files in Git
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The symlinks created above (``asc-devkit``, skills under ``.opencode/skills/``, and agents under
-``.opencode/agents/``) are external dependencies and should not be tracked by git. It is recommended
-to add them to the local ``.git/info/exclude`` file:
+The ``skills`` CLI creates ``skills-lock.json`` in the project root. It is an external
+dependency, so add it to the local ``.git/info/exclude`` file (``.agents/`` is already
+covered by the ``.agents/`` entry in ``.gitignore``):
 
 .. code-block:: bash
 
-    echo "
-    # CANNBot skills symlinks
-    asc-devkit
-    .opencode/skills/ascendc-*
-    .opencode/skills/npu-arch
-    .opencode/skills/ops-*
-    .opencode/skills/aiss-*
-    .opencode/agents/ascendc-*" >> .git/info/exclude
+    echo "skills-lock.json" >> .git/info/exclude
 
 
 Updating
 --------
 
+With the ``skills`` CLI:
+
+.. code-block:: bash
+
+    npx skills check
+    npx skills update
+
+With a manual installation, pull the repository:
+
 .. code-block:: bash
 
     cd $CANNBOT_SKILLS && git pull
-    cd plugins-official/ops-direct-invoke/asc-devkit && git pull
 
-Restart OpenCode to apply updates.
-
-
-Alternative: Automated Installation
------------------------------------
-
-Use ``init.sh`` from a plugin directory to install all skills from that plugin:
+Both methods: update ``asc-devkit`` as well:
 
 .. code-block:: bash
 
-    cd $CANNBOT_SKILLS/plugins-official/<plugin-name>
-    bash init.sh project opencode /path/to/pyasc
+    cd $ASC_DEVKIT_DIR && git pull
 
-See the `cannbot-skills README <https://gitcode.com/cann/cannbot-skills>`__ for available plugins.
+Restart OpenCode to apply updates.
+

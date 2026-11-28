@@ -42,28 +42,28 @@ def rms_golden(input_tensor, gamma, eps):
 
 # yapf: disable
 @parametrize_is_static()
-@pytest.mark.parametrize("test_name, block_num, input_shapes, input_dtypes, output_shapes, output_dtypes, compile_params, runtime_params, tiling_key, tiling_params", [
+@pytest.mark.parametrize("block_num, input_shapes, input_dtypes, output_shapes, output_dtypes, compile_params, runtime_params, tiling_key, tiling_params", [
 # PYASC_TESTS_BEGIN
-    pytest.param("rms_norm_1", 2, ([2, 1024], [1024]), (torch.float16, torch.float16), ([2, 1024], [2, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (2, 1024, 1024, 1, 512, 1, 9.999999747378752e-06, 0.0009765625, 1)),
-    pytest.param("rms_norm_2", 2, ([2, 2048], [2048]), (torch.float16, torch.float16), ([2, 2048], [2, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (2, 2048, 2048, 1, 1024, 1, 9.999999747378752e-06, 0.00048828125, 1)),
-    pytest.param("rms_norm_3", 1, ([1, 2048], [2048]), (torch.float16, torch.float16), ([1, 2048], [1, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (1, 2048, 2048, 1, 1024, 1, 9.999999747378752e-06, 0.00048828125, 1)),
-    pytest.param("rms_norm_4", 3, ([3, 2048], [2048]), (torch.float16, torch.float16), ([3, 2048], [3, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (3, 2048, 2048, 1, 1024, 1, 9.999999747378752e-06, 0.00048828125, 1)),
-    pytest.param("rms_norm_5", 60, ([300, 1024], [1024]), (torch.float16, torch.float16), ([300, 1024], [300, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (300, 1024, 1024, 5, 512, 5, 9.999999747378752e-06, 0.0009765625, 5)),
-    pytest.param("rms_norm_6", 60, ([300, 2048], [2048]), (torch.float16, torch.float16), ([300, 2048], [300, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (300, 2048, 2048, 5, 1024, 5, 9.999999747378752e-06, 0.00048828125, 5)),
-    pytest.param("rms_norm_7", 71, ([2048, 2048], [2048]), (torch.float16, torch.float16), ([2048, 2048], [2048, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (2048, 2048, 2048, 29, 1024, 15, 9.999999747378752e-06, 0.00048828125, 18)),
-    pytest.param("rms_norm_8", 72, ([3072, 2048], [2048]), (torch.float16, torch.float16), ([3072, 2048], [3072, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (3072, 2048, 2048, 43, 1024, 15, 9.999999747378752e-06, 0.00048828125, 19)),
-    pytest.param("rms_norm_9", 70, ([900, 2048], [2048]), (torch.float16, torch.float16), ([900, 2048], [900, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (900, 2048, 2048, 13, 1024, 13, 9.999999747378752e-06, 0.00048828125, 3)),
-    pytest.param("rms_norm_10", 70, ([1536, 2048], [2048]), (torch.float16, torch.float16), ([1536, 2048], [1536, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (1536, 2048, 2048, 22, 1024, 15, 9.999999747378752e-06, 0.00048828125, 18) ),
-    pytest.param("rms_norm_11", 72, ([4608, 2048], [2048]), (torch.float16, torch.float16), ([4608, 2048], [4608, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (4608, 2048, 2048, 64, 1024, 15, 9.999999747378752e-06, 0.00048828125, 64) ),
-    pytest.param("rms_norm_12", 69, ([1024, 2048], [2048]), (torch.float16, torch.float16), ([1024, 2048], [1024, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (1024, 2048, 2048, 15, 1024, 15, 9.999999747378752e-06, 0.00048828125, 4) ),
-    pytest.param("rms_norm_13", 67, ([600, 2048], [2048]), (torch.float16, torch.float16), ([600, 2048], [600, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (600, 2048, 2048, 9, 1024, 9, 9.999999747378752e-06, 0.00048828125, 6) ),
-    pytest.param("rms_norm_14", 70, ([1536, 1024], [1024]), (torch.float16, torch.float16), ([1536, 1024], [1536, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (1536, 1024, 1024, 22, 512, 22, 9.999999747378752e-06, 0.0009765625, 18) ),
-    pytest.param("rms_norm_15", 71, ([2048, 1024], [1024]), (torch.float16, torch.float16), ([2048, 1024], [2048, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (2048, 1024, 1024, 29, 512, 29, 9.999999747378752e-06, 0.0009765625, 18) )
+    pytest.param(2, ([2, 1024], [1024]), (torch.float16, torch.float16), ([2, 1024], [2, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (2, 1024, 1024, 1, 512, 1, 9.999999747378752e-06, 0.0009765625, 1), id="rms_norm_1"),
+    pytest.param(2, ([2, 2048], [2048]), (torch.float16, torch.float16), ([2, 2048], [2, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (2, 2048, 2048, 1, 1024, 1, 9.999999747378752e-06, 0.00048828125, 1), id="rms_norm_2"),
+    pytest.param(1, ([1, 2048], [2048]), (torch.float16, torch.float16), ([1, 2048], [1, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (1, 2048, 2048, 1, 1024, 1, 9.999999747378752e-06, 0.00048828125, 1), id="rms_norm_3"),
+    pytest.param(3, ([3, 2048], [2048]), (torch.float16, torch.float16), ([3, 2048], [3, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (3, 2048, 2048, 1, 1024, 1, 9.999999747378752e-06, 0.00048828125, 1), id="rms_norm_4"),
+    pytest.param(60, ([300, 1024], [1024]), (torch.float16, torch.float16), ([300, 1024], [300, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (300, 1024, 1024, 5, 512, 5, 9.999999747378752e-06, 0.0009765625, 5), id="rms_norm_5"),
+    pytest.param(60, ([300, 2048], [2048]), (torch.float16, torch.float16), ([300, 2048], [300, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (300, 2048, 2048, 5, 1024, 5, 9.999999747378752e-06, 0.00048828125, 5), id="rms_norm_6"),
+    pytest.param(71, ([2048, 2048], [2048]), (torch.float16, torch.float16), ([2048, 2048], [2048, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (2048, 2048, 2048, 29, 1024, 15, 9.999999747378752e-06, 0.00048828125, 18), id="rms_norm_7"),
+    pytest.param(72, ([3072, 2048], [2048]), (torch.float16, torch.float16), ([3072, 2048], [3072, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (3072, 2048, 2048, 43, 1024, 15, 9.999999747378752e-06, 0.00048828125, 19), id="rms_norm_8"),
+    pytest.param(70, ([900, 2048], [2048]), (torch.float16, torch.float16), ([900, 2048], [900, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (900, 2048, 2048, 13, 1024, 13, 9.999999747378752e-06, 0.00048828125, 3), id="rms_norm_9"),
+    pytest.param(70, ([1536, 2048], [2048]), (torch.float16, torch.float16), ([1536, 2048], [1536, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (1536, 2048, 2048, 22, 1024, 15, 9.999999747378752e-06, 0.00048828125, 18) , id="rms_norm_10"),
+    pytest.param(72, ([4608, 2048], [2048]), (torch.float16, torch.float16), ([4608, 2048], [4608, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (4608, 2048, 2048, 64, 1024, 15, 9.999999747378752e-06, 0.00048828125, 64) , id="rms_norm_11"),
+    pytest.param(69, ([1024, 2048], [2048]), (torch.float16, torch.float16), ([1024, 2048], [1024, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (1024, 2048, 2048, 15, 1024, 15, 9.999999747378752e-06, 0.00048828125, 4) , id="rms_norm_12"),
+    pytest.param(67, ([600, 2048], [2048]), (torch.float16, torch.float16), ([600, 2048], [600, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (600, 2048, 2048, 9, 1024, 9, 9.999999747378752e-06, 0.00048828125, 6) , id="rms_norm_13"),
+    pytest.param(70, ([1536, 1024], [1024]), (torch.float16, torch.float16), ([1536, 1024], [1536, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (1536, 1024, 1024, 22, 512, 22, 9.999999747378752e-06, 0.0009765625, 18) , id="rms_norm_14"),
+    pytest.param(71, ([2048, 1024], [1024]), (torch.float16, torch.float16), ([2048, 1024], [2048, 1]), (torch.float16, torch.float32), (1e-05), None, 5000, (2048, 1024, 1024, 29, 512, 29, 9.999999747378752e-06, 0.0009765625, 18) , id="rms_norm_15")
 # PYASC_TESTS_END
 ])
 # yapf: enable
-def test_rms_norm(profiler, runs, is_static, test_name, block_num, input_shapes, input_dtypes, output_shapes,
-                  output_dtypes, compile_params, runtime_params, tiling_key, tiling_params):
+def test_rms_norm(profiler, runs, is_static, block_num, input_shapes, input_dtypes, output_shapes, output_dtypes,
+                  compile_params, runtime_params, tiling_key, tiling_params):
     x_shape, gamma_shape = input_shapes
     y_shape = output_shapes[0]
     x_dtype, gamma_dtype = input_dtypes

@@ -35,6 +35,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "asctile/Dialect/AscVF/IR/AscVF.h"
+#include "asctile/Dialect/AscVF2/IR/AscVF2.h"
+#include "asctile/Dialect/AscendC/IR/Interfaces.h"
 #include "asctile/Dialect/AscendC/Transforms/Passes.h"
 #include "asctile/Dialect/AscendC/Utils/Attributes.h"
 #include "asctile/Dialect/AscendC/Utils/Utils.h"
@@ -180,7 +182,10 @@ public:
         llvm::stable_sort(uses, [&](OpOperand* lhso, OpOperand* rhso) {
             return ascendc::opPrecedes(lhso->getOwner(), rhso->getOwner(), *di);
         });
-        llvm::erase_if(uses, [](OpOperand* opnd) { return opnd->getOwner()->getParentOfType<ascvf::VFGroupOp>(); });
+        llvm::erase_if(uses, [](OpOperand* opnd) {
+            return opnd->getOwner()->getParentOfType<ascvf::VFGroupOp>() ||
+                   opnd->getOwner()->getParentOfType<ascvf2::VFGroupOp>();
+        });
         beginLifeOp = uses.front()->getOwner();
         firstUse = findFirstUse(uses);
         lastUse = uses.back();
@@ -281,10 +286,10 @@ TensorSet collectCrossGroupTensors(func::FuncOp funcOp)
         if (!direction)
             return;
         auto [src, dst] = *direction;
-        if (src == ascendc::TPosition::VECCALC && (dst == ascendc::TPosition::A1 || dst == ascendc::TPosition::B1))
-            if (auto root = ascendc::getAllocationRoot(copyOp.getSrc()))
-                crossGroup.insert(root);
-        if (src == ascendc::TPosition::CO1 && dst == ascendc::TPosition::VECCALC)
+        bool isUBToL1 =
+            src == ascendc::TPosition::VECCALC && (dst == ascendc::TPosition::A1 || dst == ascendc::TPosition::B1);
+        bool isL0CToUB = src == ascendc::TPosition::CO1 && dst == ascendc::TPosition::VECCALC;
+        if (isUBToL1 || isL0CToUB)
             if (auto root = ascendc::getAllocationRoot(copyOp.getDst()))
                 crossGroup.insert(root);
     });
@@ -355,10 +360,6 @@ bool canReuse(const LifetimeInfo& topTensorLTI, const LifetimeInfo& bottomTensor
         return false;
     }
     if (auto* borderOp = topInfo->getEndBorderOp(*bottomInfo)) {
-        if (top.getType().getElementType() != bottom.getType().getElementType()) {
-            LLVM_DEBUG(llvm::dbgs() << "  reject: same-op element type mismatch\n");
-            return false;
-        }
         // Only allow same-op reuse for operations marked with OpWithReusableSrc.
         // Operations like BroadcastOp that read sources multiple times are not marked
         // and will be rejected here.

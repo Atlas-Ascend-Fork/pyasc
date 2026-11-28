@@ -21,6 +21,16 @@ from ..language.tensor_location import TensorLocation
 from ..language.validation import check_type
 from .patch import override
 
+try:
+    import ml_dtypes
+    ml_dtypes_map = {
+        name: np.dtype(getattr(ml_dtypes, name))
+        for name in DataType.support_types
+        if hasattr(ml_dtypes, name)
+    }
+except ImportError:
+    ml_dtypes_map = {}
+
 dtype_to_numpy_map = MappingProxyType({
     "int1": np.dtype(np.bool_),
     "int8": np.dtype(np.int8),
@@ -34,6 +44,7 @@ dtype_to_numpy_map = MappingProxyType({
     "float16": np.dtype(np.float16),
     "float32": np.dtype(np.float32),
     "float64": np.dtype(np.float64),
+    **ml_dtypes_map,
 })
 
 numpy_to_dtype_map = MappingProxyType({np_dtype: name for name, np_dtype in dtype_to_numpy_map.items()})
@@ -69,7 +80,7 @@ round_mode_map = MappingProxyType({
 
 def cast_data(data: Any, dtype: DataType, round_mode: Any = RoundMode.Default) -> Any:
     target = dtype_to_numpy(dtype)
-    if data.dtype.kind == "f" and target.kind in "iub":
+    if data.dtype.kind in "fV" and target.kind in "iub":
         data = round_mode_map[round_mode](data)
     if target.kind in "iu":
         info = np.iinfo(target)

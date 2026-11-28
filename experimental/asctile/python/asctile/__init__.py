@@ -170,6 +170,7 @@ from .language.reduction_ops import (
     reduce_prod,
 )
 
+from .runtime.autotuner import autotune
 from .runtime.compiler import CompileOptions
 from .runtime.config import set_platform
 from .runtime.jit import jit
@@ -286,6 +287,8 @@ __all__ += [
     "reduce_max",
     "reduce_min",
     "reduce_prod",
+    # .runtime.autotuner
+    "autotune",
     # .runtime.compiler
     "CompileOptions",
     # .runtime.config

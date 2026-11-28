@@ -79,6 +79,31 @@ std::optional<TL> findRequiredLoc(Value value)
     return *locs.begin();
 }
 
+std::optional<TL> getSourceLoc(Value value)
+{
+    auto tensorType = dyn_cast<LocalTensorType>(value.getType());
+    if (!tensorType)
+        return std::nullopt;
+    if (tensorType.getLoc() != TL::Auto)
+        return tensorType.getLoc();
+    Operation* definingOp = value.getDefiningOp();
+    if (!definingOp)
+        return std::nullopt;
+    if (auto castOp = dyn_cast<tensor::CastOp>(definingOp))
+        return getSourceLoc(castOp.getOperand());
+    auto concatOp = dyn_cast<tensor::ConcatOp>(definingOp);
+    if (!concatOp)
+        return std::nullopt;
+    std::optional<TL> sourceLoc;
+    for (auto operand : concatOp.getOperands()) {
+        auto operandLoc = getSourceLoc(operand);
+        if (!operandLoc || (sourceLoc && *sourceLoc != *operandLoc))
+            return std::nullopt;
+        sourceLoc = operandLoc;
+    }
+    return sourceLoc;
+}
+
 LogicalResult acceptResultLoc(PatternRewriter& rewriter, OpResult result, LocRange allowedLocs = std::nullopt)
 {
     auto oldType = dyn_cast<LocalTensorType>(result.getType());
@@ -150,6 +175,13 @@ struct RequireSameLoc : RewritePattern {
         auto requiredLoc = defaultLoc;
         SmallVector<Type, 8> types(op->getOperandTypes());
         llvm::copy(op->getResultTypes(), std::back_inserter(types));
+        for (auto& opnd : op->getOpOperands()) {
+            auto sourceLoc = getSourceLoc(opnd.get());
+            if (!sourceLoc || (!allowedLocs.empty() && !llvm::is_contained(allowedLocs, *sourceLoc)))
+                continue;
+            requiredLoc = *sourceLoc;
+            break;
+        }
         for (auto type : types) {
             auto tensor = dyn_cast<LocalTensorType>(type);
             if (!tensor || tensor.getLoc() == TL::Auto)
@@ -270,9 +302,17 @@ struct AcceptAnyLoc : OpRewritePattern<typename Traits::Op> {
 
 using AcceptLoadLoc = AcceptAnyLoc<Traits<LoadOp>, 0>;
 using AcceptCopyLoc = AcceptAnyLoc<Traits<CopyOp, &CopyOp::getBaseMutable>, 0>;
-using AcceptStoreLoc = AcceptAnyLoc<Traits<StoreOp, &StoreOp::getValueMutable>>;
 using AcceptSetValueLoc = AcceptAnyLoc<Traits<SetValueOp, &SetValueOp::getValueMutable>>;
 using AcceptDumpTensorLoc = AcceptAnyLoc<Traits<DumpTensorOp, &DumpTensorOp::getTensorMutable>>;
+
+struct AcceptStoreLoc : OpRewritePattern<StoreOp> {
+    using OpRewritePattern<StoreOp>::OpRewritePattern;
+
+    LogicalResult matchAndRewrite(StoreOp op, PatternRewriter& rewriter) const override
+    {
+        return acceptOperandLoc(rewriter, &op.getValueMutable(), LocRange{TL::UB, TL::L0C});
+    }
+};
 
 struct AcceptForLoc : OpRewritePattern<scf::ForOp> {
     using OpRewritePattern::OpRewritePattern;
@@ -420,8 +460,10 @@ void populateSecondStage(RewritePatternSet& patterns)
     enum : unsigned { LowBenefit = 1, HighBenefit = 10 };
     auto* context = patterns.getContext();
     populateCommon(patterns, LowBenefit);
-    patterns.add<RequireSameLoc<LoadOp, StoreOp>>(context, std::nullopt, TL::UB, LowBenefit)
+    patterns.add<RequireSameLoc<LoadOp>>(context, std::nullopt, TL::UB, LowBenefit)
+        .add<RequireSameLoc<StoreOp>>(context, LocRange{TL::UB, TL::L0C}, TL::UB, LowBenefit)
         .add<RequireSameLoc<CastOp, ReluOp>>(context, LocRange{TL::UB, TL::L0C}, TL::UB, HighBenefit)
+        .add<RequireSameLoc<tensor::ConcatOp>>(context, LocRange{TL::UB, TL::L0C}, TL::UB, HighBenefit)
         .add<RequireSameLoc<ReshapeOp>>(context, std::nullopt, TL::UB, HighBenefit)
         .add<RequireSameLoc<TransposeOp>>(context, LocRange{TL::UB, TL::L1, TL::L0A, TL::L0B}, TL::UB, HighBenefit);
 }

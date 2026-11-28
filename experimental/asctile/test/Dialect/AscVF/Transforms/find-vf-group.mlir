@@ -115,3 +115,32 @@ func.func @row_broadcast_not_grouped_if_multiple_src_rows(%dst: !ascendc.local_t
   ascendc.broadcast %dst, %src, %c1, %c16, %c1, %c1, %c16, %c1 {operandSegmentSizes = array<i32: 1, 1, 3, 3>} : !ascendc.local_tensor<96x16xf32>, !ascendc.local_tensor<16x1xf32>, i32, i32, i32, i32, i32, i32
   return
 }
+
+// CHECK-LABEL: func.func @group_reduce_min_if_pattern_AR
+// CHECK: ascvf.vf_group
+// CHECK-NOT: ascvf.vf_group
+func.func @group_reduce_min_if_pattern_AR(%src: !ascendc.local_tensor<2x1024xf32>) {
+  %c2_i32 = arith.constant 2 : i32
+  %c1024_i32 = arith.constant 1024 : i32
+  %dst0 = ascendc.local_tensor_auto veccalc() : <2x1xf32>
+  %work0 = ascendc.local_tensor_auto veccalc() : <8192xui8>
+  %dst1 = ascendc.local_tensor_auto veccalc() : <2x1xf32>
+  %work1 = ascendc.local_tensor_auto veccalc() : <8192xui8>
+  ascendc.reduce_min %dst0, %src, %work0, %c2_i32, %c1024_i32 {pattern = 1 : i32} : !ascendc.local_tensor<2x1xf32>, !ascendc.local_tensor<2x1024xf32>, !ascendc.local_tensor<8192xui8>, i32, i32
+  ascendc.reduce_min %dst1, %src, %work1, %c2_i32, %c1024_i32 {pattern = 1 : i32} : !ascendc.local_tensor<2x1xf32>, !ascendc.local_tensor<2x1024xf32>, !ascendc.local_tensor<8192xui8>, i32, i32
+  return
+}
+
+// CHECK-LABEL: func.func @do_not_group_reduce_min_if_pattern_not_AR
+// CHECK-NOT: ascvf.vf_group
+func.func @do_not_group_reduce_min_if_pattern_not_AR(%src: !ascendc.local_tensor<2x1024xf32>) {
+  %c2_i32 = arith.constant 2 : i32
+  %c1024_i32 = arith.constant 1024 : i32
+  %dst0 = ascendc.local_tensor_auto veccalc() : <2x1xf32>
+  %work0 = ascendc.local_tensor_auto veccalc() : <8192xui8>
+  %dst1 = ascendc.local_tensor_auto veccalc() : <2x1xf32>
+  %work1 = ascendc.local_tensor_auto veccalc() : <8192xui8>
+  ascendc.reduce_min %dst0, %src, %work0, %c2_i32, %c1024_i32 {pattern = 0 : i32} : !ascendc.local_tensor<2x1xf32>, !ascendc.local_tensor<2x1024xf32>, !ascendc.local_tensor<8192xui8>, i32, i32
+  ascendc.reduce_min %dst1, %src, %work1, %c2_i32, %c1024_i32 {pattern = 0 : i32} : !ascendc.local_tensor<2x1xf32>, !ascendc.local_tensor<2x1024xf32>, !ascendc.local_tensor<8192xui8>, i32, i32
+  return
+}

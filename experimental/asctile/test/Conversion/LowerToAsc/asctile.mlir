@@ -160,6 +160,19 @@ func.func @lower_reduce_max(%arg0: tensor<64x32xf32, #asctile.local<UB>>) -> ten
   return %0 : tensor<32xf32, #asctile.local<UB>>
 }
 
+// CHECK-LABEL: func.func @lower_reduce_1D(%arg0: tensor<32xf32, #asctile.local<UB>>) -> tensor<1xf32, #asctile.local<UB>> {
+// CHECK:       %0 = builtin.unrealized_conversion_cast %arg0 : tensor<32xf32, #asctile.local<UB>> to !ascendc.local_tensor<32xf32>
+// CHECK-NEXT:  %1 = ascendc.local_tensor_auto veccalc() : <1xf32>
+// CHECK-NEXT:  %2 = ascendc.local_tensor_auto veccalc() : <128xui8>
+// CHECK-NEXT:  ascendc.reduce_sum %1, %0, %2, %c1_i32, %c32_i32 {pattern = 1 : i32} : !ascendc.local_tensor<1xf32>, !ascendc.local_tensor<32xf32>, !ascendc.local_tensor<128xui8>, i32, i32
+// CHECK-NEXT:  %3 = builtin.unrealized_conversion_cast %1 : !ascendc.local_tensor<1xf32> to tensor<1xf32, #asctile.local<UB>>
+// CHECK-NEXT:  return %3 : tensor<1xf32, #asctile.local<UB>>
+// CHECK-NEXT:}
+func.func @lower_reduce_1D(%arg0: tensor<32xf32, #asctile.local<UB>>) -> tensor<1xf32, #asctile.local<UB>> {
+  %0 = asctile.reduce <sum> %arg0 {dims = [0 : i32]} : tensor<32xf32, #asctile.local<UB>>, tensor<1xf32, #asctile.local<UB>>
+  return %0 : tensor<1xf32, #asctile.local<UB>>
+}
+
 // CHECK-LABEL: func.func @lower_reduce_with_reuse(%arg0: tensor<64x32xf32, #asctile.local<UB>>) -> tensor<32xf32, #asctile.local<UB>> {
 // CHECK:       %0 = builtin.unrealized_conversion_cast %arg0 : tensor<64x32xf32, #asctile.local<UB>> to !ascendc.local_tensor<64x32xf32>
 // CHECK-NEXT:  %1 = ascendc.local_tensor_auto veccalc() : <32xf32>

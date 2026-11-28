@@ -27,6 +27,8 @@ def _make_jit(launched_options):
         _run = jit_module.JITFunction._run
         if hasattr(jit_module.JITFunction, "_run_with_options"):
             _run_with_options = jit_module.JITFunction._run_with_options
+        if hasattr(jit_module.JITFunction, "create_compile_prereqs"):
+            create_compile_prereqs = jit_module.JITFunction.create_compile_prereqs
         extract_kwargs = staticmethod(jit_module.JITFunction.extract_kwargs)
         get_arg_type = staticmethod(jit_module.JITFunction.get_arg_type)
         split_args = staticmethod(jit_module.Function.split_args)

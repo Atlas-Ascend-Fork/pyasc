@@ -22,4 +22,6 @@ LINK_LIBS PUBLIC
   MLIRIR
   MLIRSupport
   MLIRAsc
+  MLIRAscUtils
+  AscTileAscendCDialect
 )

@@ -25,6 +25,7 @@ target_link_libraries(${TARGET_NAME} PRIVATE
 
   AscTileDialect
   AscVFDialect
+  AscVF2Dialect
 
   MLIRIR
   MLIRLspServerLib
@@ -73,6 +74,7 @@ target_link_libraries(${TARGET_NAME} PRIVATE
   AscTileLowerToAsc
   AscTileTransforms
   AscVFTransforms
+  AscVF2Transforms
 )
 
 llvm_update_compile_flags(${TARGET_NAME})

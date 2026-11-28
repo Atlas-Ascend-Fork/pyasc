@@ -73,6 +73,7 @@ Memory operations
     copy_in
     copy_out
     gather
+    reindex
     scatter
 
 

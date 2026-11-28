@@ -33,7 +33,7 @@ TIDY_WARNING_COUNT=0
 # ============================================================================
 # Compile Flags Setup
 # ============================================================================
-MANUAL_COMPILE_FLAGS="-std=c++17 -I${PROJECT_ROOT}/include"
+MANUAL_COMPILE_FLAGS="-std=c++17 -I${PROJECT_ROOT}/include -I${PROJECT_ROOT}/experimental/asctile/include"
 
 setup_compile_flags() {
     if [[ -n "$LLVM_INSTALL_PREFIX" && -d "$LLVM_INSTALL_PREFIX/include" ]]; then
@@ -98,7 +98,12 @@ run_clang_tidy_diff_check() {
         done <<< "$python_include_dirs"
     fi
     if [[ -n "$COMPILE_DB" ]]; then
-        tidy_output=$(git diff -U0 "$BASE_BRANCH" HEAD | clang-tidy-diff "${tidy_args[@]}" -path "$(dirname "$COMPILE_DB")" 2>&1) || true
+        # ignore experimental files if the build does not contain them
+        if [[ -n $(grep experimental "$COMPILE_DB")"" ]]; then
+	    tidy_output=$(git diff -U0 "$BASE_BRANCH" HEAD | clang-tidy-diff "${tidy_args[@]}" -path "$(dirname "$COMPILE_DB")" 2>&1) || true
+	else
+	    tidy_output=$(git diff -U0 "$BASE_BRANCH" HEAD -- ':(exclude)experimental/*' | clang-tidy-diff "${tidy_args[@]}" -path "$(dirname "$COMPILE_DB")" 2>&1) || true
+	fi
     else
         tidy_args+=(-extra-arg-before="-x" -extra-arg-before="c++")
         for flag in $MANUAL_COMPILE_FLAGS; do

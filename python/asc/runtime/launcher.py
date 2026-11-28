@@ -25,6 +25,10 @@ from .memory_handle import MemoryHandle, resolve_memory_handle
 KernelCallback: TypeAlias = Callable[[rt.Function], None]
 
 
+class MemoryOverflowError(RuntimeError):
+    pass
+
+
 def dry_run_requested(value: Optional[str] = None) -> bool:
     """True only when ``PYASC_DRY_RUN`` is an explicit on-value.
 
@@ -166,7 +170,7 @@ class Launcher:
             consumed = memory_consumed.get(key, 0)
             capacity = getattr(platform_info, attr)
             if consumed > capacity:
-                raise RuntimeError(f"{key} overflow: {capacity} bytes are available, {consumed} bytes are used.")
+                raise MemoryOverflowError(f"{key} overflow: {capacity} bytes are available, {consumed} bytes are used.")
 
     @classmethod
     def expand_kernel_args(cls, args: Iterable[Any]) -> List[Union[np.generic, MemoryHandle]]:

@@ -34,10 +34,10 @@ def softmax(x_ptr: asctile.GlobalAddress, out_ptr: asctile.GlobalAddress, input_
 
 
 @pytest.mark.parametrize(
-    "test_name, block_num, input_shapes, input_dtypes, output_shapes, output_dtypes, compile_params, runtime_params, tiling_key, tiling_params",
+    "block_num, input_shapes, input_dtypes, output_shapes, output_dtypes, compile_params, runtime_params, tiling_key, tiling_params",
     test_cases)
-def test_softmax(profiler, backend, platform, device_id, runs, test_name, block_num, input_shapes, input_dtypes,
-                 output_shapes, output_dtypes, compile_params, runtime_params, tiling_key, tiling_params):
+def test_softmax(profiler, backend, platform, device_id, runs, block_num, input_shapes, input_dtypes, output_shapes,
+                 output_dtypes, compile_params, runtime_params, tiling_key, tiling_params):
     unroll_factor = runtime_params[0]
     input_shape, input_dtype = input_shapes[0], input_dtypes[0]
     output_dtype = output_dtypes[0]

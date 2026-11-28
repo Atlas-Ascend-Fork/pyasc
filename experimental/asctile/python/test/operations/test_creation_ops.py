@@ -208,7 +208,7 @@ def test_concat_two_tiles_1d(require_c310, dtype: torch.dtype):
         out_gm = asctile.global_tensor(out_ptr, out_shape)
         tile_a = asctile.copy_in(a_gm, [0], shape_a)
         tile_b = asctile.copy_in(b_gm, [0], shape_b)
-        result = asctile.concat(tile_a, tile_b)
+        result = asctile.concat(tile_a, tile_b, dim=0)
         asctile.copy_out(result, out_gm, [0])
 
     a = torch.arange(16, dtype=dtype)
@@ -236,7 +236,7 @@ def test_concat_three_tiles_1d(require_c310):
         tile_a = asctile.copy_in(a_gm, [0], shape_a)
         tile_b = asctile.copy_in(b_gm, [0], shape_b)
         tile_c = asctile.copy_in(c_gm, [0], shape_c)
-        result = asctile.concat(tile_a, tile_b, tile_c)
+        result = asctile.concat(tile_a, tile_b, tile_c, dim=0)
         asctile.copy_out(result, out_gm, [0])
 
     a = torch.arange(8, dtype=torch.float32)
@@ -264,7 +264,7 @@ def test_concat_two_tiles_2d(require_c310, dtype: torch.dtype):
         out_gm = asctile.global_tensor(out_ptr, out_shape)
         tile_a = asctile.copy_in(a_gm, [0, 0], shape_a)
         tile_b = asctile.copy_in(b_gm, [0, 0], shape_b)
-        result = asctile.concat(tile_a, tile_b)
+        result = asctile.concat(tile_a, tile_b, dim=0)
         asctile.copy_out(result, out_gm, [0, 0])
 
     a = torch.arange(2 * last_dim, dtype=dtype).reshape(2, last_dim)
@@ -289,7 +289,7 @@ def test_concat_different_first_dim(require_c310):
         out_gm = asctile.global_tensor(out_ptr, out_shape)
         tile_a = asctile.copy_in(a_gm, [0], shape_a)
         tile_b = asctile.copy_in(b_gm, [0], shape_b)
-        result = asctile.concat(tile_a, tile_b)
+        result = asctile.concat(tile_a, tile_b, dim=0)
         asctile.copy_out(result, out_gm, [0])
 
     a = torch.arange(4, dtype=torch.float32)
@@ -298,3 +298,35 @@ def test_concat_different_first_dim(require_c310):
     kernel[1](a, b, out, shape_a, shape_b, out_shape)
     expected = torch.cat([a, b])
     assert_close(out, expected)
+
+
+def test_concat_l0c(require_c310):
+    require_c310()
+    m, k, n = 32, 64, 128
+
+    def random_f16(*shape):
+        return (torch.rand(*shape, dtype=torch.float16) - .5) * 10
+
+    a1 = random_f16(m, k)
+    b1 = random_f16(k, n)
+    a2 = random_f16(m, k)
+    b2 = random_f16(k, n)
+    c = torch.zeros((m, n * 2), dtype=torch.float32)
+
+    @asctile.jit(always_compile=True)
+    def kernel(a1_ptr, b1_ptr, a2_ptr, b2_ptr, c_ptr):
+        a1 = asctile.copy_in(asctile.global_tensor(a1_ptr, [m, k]), [0, 0], [m, k], asctile.TensorLocation.L0A)
+        b1 = asctile.copy_in(asctile.global_tensor(b1_ptr, [k, n]), [0, 0], [k, n], asctile.TensorLocation.L0B)
+        c1 = a1 @ b1
+        a2 = asctile.copy_in(asctile.global_tensor(a2_ptr, [m, k]), [0, 0], [m, k], asctile.TensorLocation.L0A)
+        b2 = asctile.copy_in(asctile.global_tensor(b2_ptr, [k, n]), [0, 0], [k, n], asctile.TensorLocation.L0B)
+        c2 = a2 @ b2
+        c = asctile.concat(c1, c2, dim=1)
+        c_gm = asctile.global_tensor(c_ptr, [m, n * 2])
+        asctile.copy_out(c, c_gm, [0, 0])
+
+    kernel[1](a1, b1, a2, b2, c)
+    c1 = a1.to(torch.float32) @ b1.to(torch.float32)
+    c2 = a2.to(torch.float32) @ b2.to(torch.float32)
+    c_ref = torch.cat([c1, c2], dim=1)
+    torch.testing.assert_close(c, c_ref, atol=1e-3, rtol=1e-3)

@@ -145,7 +145,20 @@ def test_concat(jit_test, mock_launch, zero_tile, dtype):
     def kernel():
         x = zero_tile([32, 32], dtype)
         y = zero_tile([64, 32], dtype)
-        asctile.concat(x, y)
+        asctile.concat(x, y, dim=0)
+
+    kernel[1]()
+    assert mock_launch.call_count == 1
+
+
+@pytest.mark.parametrize("dim, loc", [(0, asctile.TensorLocation.UB), (1, asctile.TensorLocation.L0C)])
+def test_concat_dim(jit_test, mock_launch, zero_tile, dim, loc):
+
+    @jit_test
+    def kernel():
+        x = zero_tile([32, 64] if dim == 0 else [32, 32], asctile.float32, loc)
+        y = zero_tile([64, 64] if dim == 0 else [32, 48], asctile.float32, loc)
+        asctile.concat(x, y, dim=dim)
 
     kernel[1]()
     assert mock_launch.call_count == 1
@@ -207,7 +220,7 @@ def test_concat_invalid_input(jit_test):
 
     @jit_test
     def kernel():
-        asctile.concat("invalid")
+        asctile.concat("invalid", dim=0)
 
     with pytest.raises(TypeError, match="tensors"):
         kernel[1]()
@@ -219,7 +232,7 @@ def test_concat_dtype_mismatch(jit_test, zero_tile):
     def kernel():
         x = zero_tile([32, 32], asctile.float32)
         y = zero_tile([64, 32], asctile.float16)
-        asctile.concat(x, y)
+        asctile.concat(x, y, dim=0)
 
     with pytest.raises(RuntimeError, match="dtype"):
         kernel[1]()
@@ -231,7 +244,31 @@ def test_concat_shape_mismatch(jit_test, zero_tile):
     def kernel():
         x = zero_tile([32, 32], asctile.float32)
         y = zero_tile([64, 64], asctile.float32)
-        asctile.concat(x, y)
+        asctile.concat(x, y, dim=0)
 
     with pytest.raises(RuntimeError, match="shape"):
+        kernel[1]()
+
+
+def test_concat_invalid_dim(jit_test, zero_tile):
+
+    @jit_test
+    def kernel():
+        x = zero_tile([32, 32], asctile.float32)
+        y = zero_tile([64, 32], asctile.float32)
+        asctile.concat(x, y, dim=2)
+
+    with pytest.raises(ValueError, match="dim"):
+        kernel[1]()
+
+
+def test_concat_dim_out_of_rank(jit_test, zero_tile):
+
+    @jit_test
+    def kernel():
+        x = zero_tile([32], asctile.float32, asctile.TensorLocation.L0C)
+        y = zero_tile([64], asctile.float32, asctile.TensorLocation.L0C)
+        asctile.concat(x, y, dim=1)
+
+    with pytest.raises(RuntimeError, match="rank"):
         kernel[1]()

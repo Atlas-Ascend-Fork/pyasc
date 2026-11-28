@@ -32,3 +32,32 @@ def make_module() -> types.ModuleType:
     for name, value in overrides.items():
         setattr(module, name, value)
     return module
+
+
+overrides_by_function: Dict[Any, Any] = {}
+
+
+def to_interpreted(value: Any) -> Any:
+    if not isinstance(value, types.FunctionType):
+        return value
+    if not overrides_by_function:
+        import asc.experimental.asctile as asctile
+        for name in asctile.__all__:
+            if name in overrides:
+                overrides_by_function[getattr(asctile, name)] = overrides[name]
+    return overrides_by_function.get(value, value)
+
+
+def make_asc_module() -> types.ModuleType:
+    import asc
+    module = types.ModuleType("asc")
+
+    def __getattr__(name: str) -> Any:
+        return getattr(asc, name)
+
+    def sync_all(*args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError("'sync_all' is not supported by the interpreter")
+
+    module.__getattr__ = __getattr__
+    module.sync_all = sync_all
+    return module

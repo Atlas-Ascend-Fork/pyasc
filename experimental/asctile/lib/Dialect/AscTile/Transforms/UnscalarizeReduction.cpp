@@ -13,6 +13,7 @@
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include "llvm/ADT/STLExtras.h"
@@ -30,37 +31,33 @@ namespace {
 
 constexpr const char* const unscalarizeAttr = "asctile.op_to_unscalarize";
 
-template <typename OpT, typename FloatOp, typename IntOp>
-struct ConvertTileScalar : OpConversionPattern<OpT> {
+template <typename OpT>
+struct ConvertScalar : OpConversionPattern<OpT> {
     using OpConversionPattern<OpT>::OpConversionPattern;
+    using OpConversionPattern<OpT>::typeConverter;
 
     LogicalResult matchAndRewrite(
         OpT op, typename OpT::Adaptor adaptor, ConversionPatternRewriter& rewriter) const override
     {
-        auto splatOp = rewriter.create<tensor::SplatOp>(op.getValue().getLoc(), op.getType(), op.getValue());
-        splatOp->setAttr(unscalarizeAttr, rewriter.getUnitAttr());
-        if (isa<IntegerType>(op.getValue().getType())) {
-            rewriter.replaceOpWithNewOp<IntOp>(op, adaptor.getBase(), splatOp);
-            return success();
-        }
-        if (isa<FloatType>(op.getValue().getType())) {
-            rewriter.replaceOpWithNewOp<FloatOp>(op, adaptor.getBase(), splatOp);
-            return success();
-        }
-        return failure();
+        auto resultType = typeConverter->convertType(op.getType());
+        rewriter.replaceOpWithNewOp<OpT>(op, resultType, adaptor.getOperands(), op->getAttrs())
+            ->removeAttr(unscalarizeAttr);
+        return success();
     }
 };
 
 struct ConvertReduce : OpConversionPattern<asctile::ReduceAs1dOp> {
-    using OpConversionPattern::getTypeConverter;
     using OpConversionPattern::OpConversionPattern;
+    using OpConversionPattern::typeConverter;
 
     LogicalResult matchAndRewrite(
         asctile::ReduceAs1dOp op, asctile::ReduceAs1dOp::Adaptor adaptor,
         ConversionPatternRewriter& rewriter) const override
     {
-        auto resultType = getTypeConverter()->convertType(op.getType());
-        rewriter.replaceOpWithNewOp<asctile::ReduceAs1dOp>(op, resultType, adaptor.getOperands(), op->getAttrs())
+        if (isa<asctile::LocalTensorType>(op.getType()))
+            return failure();
+        auto resultType = typeConverter->convertType(op.getType());
+        rewriter.replaceOpWithNewOp<asctile::ReduceAs1dOp>(op, resultType, op->getOperands(), op->getAttrs())
             ->removeAttr(unscalarizeAttr);
         return success();
     }
@@ -68,38 +65,91 @@ struct ConvertReduce : OpConversionPattern<asctile::ReduceAs1dOp> {
 
 struct ConvertSplat : OpConversionPattern<tensor::SplatOp> {
     using OpConversionPattern::OpConversionPattern;
+    using OpConversionPattern::typeConverter;
 
     LogicalResult matchAndRewrite(
         tensor::SplatOp op, tensor::SplatOp::Adaptor adaptor, ConversionPatternRewriter& rewriter) const override
     {
-        rewriter.replaceOpWithNewOp<asctile::BroadcastOp>(op, op.getType(), adaptor.getInput());
+        auto resultType = typeConverter->convertType(op.getType());
+        rewriter.replaceOpWithNewOp<asctile::BroadcastOp>(op, resultType, adaptor.getOperands(), op->getAttrs())
+            ->removeAttr(unscalarizeAttr);
         return success();
     }
 };
 
-bool allUnscalarizableUsers(Operation* op)
+Value materialize(OpBuilder& builder, Type type, ValueRange inputs, Location loc)
 {
-    return llvm::all_of(op->getUsers(), [](Operation* user) {
-        return isa<
-            asctile::AddSOp, asctile::SubSOp, asctile::MulSOp, asctile::DivSOp, asctile::MinSOp, asctile::MaxSOp,
-            tensor::SplatOp>(user);
-    });
+    Value input = inputs[0];
+    if (input.getType().isIntOrFloat() && isa<asctile::LocalTensorType>(type)) {
+        return builder.create<tensor::SplatOp>(loc, type, input);
+    }
+    if (isa<asctile::LocalTensorType>(input.getType()) && type.isIntOrFloat()) {
+        Value zero = builder.create<arith::ConstantIndexOp>(loc, 0);
+        auto tensorType = cast<asctile::LocalTensorType>(input.getType());
+        SmallVector<Value> indices(tensorType.getRank(), zero);
+        return builder.create<tensor::ExtractOp>(loc, input, indices);
+    }
+    return builder.create<UnrealizedConversionCastOp>(loc, type, inputs).getResult(0);
+}
+
+bool isSentinelOp(Operation* op) { return isa<tensor::SplatOp>(op); }
+
+bool isTensorizableOp(Operation* op)
+{
+    return isa<
+        asctile::ReduceAs1dOp, arith::AddFOp, arith::AddIOp, arith::SubFOp, arith::SubIOp, arith::MulFOp, arith::MulIOp,
+        arith::DivFOp, arith::DivSIOp, arith::MaximumFOp, arith::MinimumFOp, arith::MaxNumFOp, arith::MinNumFOp,
+        arith::MaxSIOp, arith::MinSIOp, arith::AndIOp, arith::OrIOp, arith::NegFOp, math::AbsFOp, math::AbsIOp,
+        math::ExpOp, math::LogOp, math::SqrtOp>(op);
+}
+
+bool supported(Operation* op) { return isTensorizableOp(op) || isSentinelOp(op); }
+
+enum class Status { NotVectorizable = -1, InProgress = 0, Vectorizable = 1 };
+
+// Finds a sequence of scalar computations whose result is used in a vector operation.
+bool canTensorize(Operation* op, llvm::DenseMap<Operation*, Status>& info)
+{
+    if (info.count(op)) {
+        const auto& status = info[op];
+        return status == Status::InProgress || status == Status::Vectorizable;
+    }
+    info[op] = Status::InProgress;
+
+    if (!supported(op)) {
+        info[op] = Status::NotVectorizable;
+        return false;
+    }
+
+    if (isTensorizableOp(op)) {
+        auto result = op->getResult(0);
+        for (auto* use : result.getUsers()) {
+            if (!canTensorize(use, info)) {
+                info[op] = Status::NotVectorizable;
+                return false;
+            }
+        }
+    }
+    info[op] = Status::Vectorizable;
+
+    for (Value opnd : op->getOperands()) {
+        if (auto* defOp = opnd.getDefiningOp())
+            canTensorize(defOp, info);
+    }
+    return true;
 }
 
 void markOps(func::FuncOp root)
 {
     root.walk([](asctile::ReduceAs1dOp op) {
-        if (isa<asctile::LocalTensorType>(op.getType()) || !allUnscalarizableUsers(op))
-            return;
-        op->setAttr(unscalarizeAttr, UnitAttr::get(op.getContext()));
-        for (auto* user : op->getUsers())
-            user->setAttr(unscalarizeAttr, UnitAttr::get(op.getContext()));
+        llvm::DenseMap<Operation*, Status> info;
+        if (canTensorize(op, info)) {
+            for (auto& [op, status] : info) {
+                if (status == Status::Vectorizable)
+                    op->setAttr(unscalarizeAttr, UnitAttr::get(op->getContext()));
+            }
+        }
     });
-}
-
-Value addUnrealizedCast(OpBuilder& builder, Type type, ValueRange inputs, Location loc)
-{
-    return builder.create<UnrealizedConversionCastOp>(loc, type, inputs).getResult(0);
 }
 
 struct UnscalarizeReductionPass : public asctile::impl::UnscalarizeReductionBase<UnscalarizeReductionPass> {
@@ -111,21 +161,20 @@ struct UnscalarizeReductionPass : public asctile::impl::UnscalarizeReductionBase
         converter.addConversion([](Type type) { return std::optional<Type>{type}; });
         converter.addConversion([](IntegerType type) { return asctile::LocalTensorType::get(1, type); });
         converter.addConversion([](FloatType type) { return asctile::LocalTensorType::get(1, type); });
-        converter.addArgumentMaterialization(addUnrealizedCast);
-        converter.addSourceMaterialization(addUnrealizedCast);
-        converter.addTargetMaterialization(addUnrealizedCast);
+        converter.addArgumentMaterialization(materialize);
+        converter.addSourceMaterialization(materialize);
+        converter.addTargetMaterialization(materialize);
         MLIRContext* context = &getContext();
         ConversionTarget target(*context);
         target.markUnknownOpDynamicallyLegal([](Operation* op) { return !op->hasAttr(unscalarizeAttr); });
         RewritePatternSet patterns(context);
         patterns.insert<
             //
-            ConvertTileScalar<asctile::AddSOp, arith::AddFOp, arith::AddIOp>,
-            ConvertTileScalar<asctile::SubSOp, arith::SubFOp, arith::SubIOp>,
-            ConvertTileScalar<asctile::MulSOp, arith::MulFOp, arith::MulIOp>,
-            ConvertTileScalar<asctile::DivSOp, arith::DivFOp, arith::DivSIOp>,
-            ConvertTileScalar<asctile::MinSOp, arith::MinimumFOp, arith::MinSIOp>,
-            ConvertTileScalar<asctile::MaxSOp, arith::MaximumFOp, arith::MaxSIOp>,
+            ConvertScalar<arith::AddFOp>, ConvertScalar<arith::SubFOp>, ConvertScalar<arith::MulFOp>,
+            ConvertScalar<arith::DivFOp>, ConvertScalar<arith::MinimumFOp>, ConvertScalar<arith::MaximumFOp>,
+            ConvertScalar<arith::AddIOp>, ConvertScalar<arith::SubIOp>, ConvertScalar<arith::MulIOp>,
+            ConvertScalar<arith::DivSIOp>, ConvertScalar<arith::MinSIOp>, ConvertScalar<arith::MaxSIOp>,
+            ConvertScalar<math::SqrtOp>,
             //
             ConvertReduce, ConvertSplat
             //

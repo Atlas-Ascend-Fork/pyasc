@@ -9,6 +9,7 @@
  */
 
 #include "asctile/Conversion/LowerToAsc/Passes.h"
+#include "asctile/Dialect/AscTile/IR/AscTile.h"
 
 #include "ascir/Dialect/Asc/IR/Asc.h"
 #include "ascir/Dialect/Utils/ConstantOpBuilder.h"
@@ -45,8 +46,22 @@ struct ConcatToNoop : public OpRewritePattern<tensor::ConcatOp> {
 
     LogicalResult matchAndRewrite(tensor::ConcatOp op, PatternRewriter& rewriter) const override
     {
-        if (op.getDim() != 0)
+        auto type = dyn_cast<asctile::LocalTensorType>(op.getType());
+        if (!type)
             return failure();
+        ascendc::TPosition pos;
+        if (type.getLoc() == asctile::TensorLocation::UB) {
+            if (op.getDim() != 0)
+                return op->emitOpError() << "only supports dimension 0 for UB tensor, got " << op.getDim();
+            pos = ascendc::TPosition::VECCALC;
+        } else if (type.getLoc() == asctile::TensorLocation::L0C) {
+            if (op.getDim() != 1)
+                return op->emitOpError() << "only supports dimension 1 for L0C tensor, got " << op.getDim();
+            pos = ascendc::TPosition::CO1;
+        } else {
+            return op->emitOpError() << "only supports tensors located in UB or L0C, got "
+                                     << asctile::stringifyTensorLocation(type.getLoc());
+        }
         SmallVector<ascendc::LocalTensorAutoOp> allocs(llvm::map_range(op.getOperands(), [](Value tensor) {
             auto castOp = tensor.getDefiningOp<UnrealizedConversionCastOp>();
             if (!castOp || castOp.getNumOperands() != 1 || castOp->getNumResults() != 1)
@@ -58,7 +73,7 @@ struct ConcatToNoop : public OpRewritePattern<tensor::ConcatOp> {
         rewriter.setInsertionPointToStart(&op->getParentOfType<func::FuncOp>().getBody().front());
         auto tileType = op.getType();
         auto resultType = ascendc::LocalTensorType::get(tileType.getShape(), tileType.getElementType());
-        Value result = rewriter.create<ascendc::LocalTensorAutoOp>(op.getLoc(), resultType);
+        Value result = rewriter.create<ascendc::LocalTensorAutoOp>(op.getLoc(), resultType, pos);
         int64_t offset = 0;
         ascir::ConstantOpBuilder consts(rewriter);
         for (auto alloc : allocs) {
@@ -79,11 +94,12 @@ struct ConvertConcat : public ConvertOp<tensor::ConcatOp> {
 
     LogicalResult matchAndRewrite(tensor::ConcatOp op, ConvertRewriter& rewriter) const override
     {
-        if (op.getDim() != 0)
+        auto type = dyn_cast<asctile::LocalTensorType>(op.getType());
+        if (!type || type.getLoc() != asctile::TensorLocation::UB || op.getDim() != 0)
             return failure();
         auto loc = op.getLoc();
         ascir::ConstantOpBuilder consts(rewriter);
-        Value dst = createTensorOp(rewriter, loc, op.getType());
+        Value dst = createTensorOp(rewriter, loc, type);
         int64_t offset = 0;
         for (auto opnd : op.getOperands()) {
             auto tensorType = typeConverter->convertType(opnd.getType());

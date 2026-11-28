@@ -20,8 +20,12 @@ target_link_libraries(${TARGET_NAME} PRIVATE
   AscTileTransforms
   AscVFDialect
   AscVFTransforms
+  AscVF2Dialect
+  AscVF2Transforms
   AscTileLowerToAsc
   AscTileAscendCTransforms
+  MLIRAffineToStandard
+  MLIRAffineTransforms
 )
 
 add_dependencies(${TARGET_NAME} AscTilePybindGen)

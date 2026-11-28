@@ -46,6 +46,12 @@ Attributes from the following classes can be used as keyword arguments in :py:ob
    :member-order: bysource
 
 
+Auto-tuning
+-----------
+
+.. autodecorator:: asc.experimental.asctile.autotune
+
+
 Platform configuration
 ----------------------
 

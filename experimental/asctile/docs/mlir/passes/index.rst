@@ -16,4 +16,5 @@ Passes
    ascendcext.md
    asctile.md
    ascvf.md
+   ascvf2.md
    lowertoasc.md

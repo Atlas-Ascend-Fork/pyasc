@@ -37,7 +37,7 @@ bool isValidCopy(TL src, TL dst)
     if (src == TL::L0C)
         return dst == TL::L1 || dst == TL::UB;
     if (src == TL::UB)
-        return dst == TL::L1;
+        return dst == TL::L1 || dst == TL::UB;
     return false;
 }
 
@@ -101,10 +101,8 @@ void FulfillDataTransferPass::runOnOperation()
         auto dstLoc = op.getType().getLoc();
         if (srcLoc == TL::L1)
             allowedDstLocs = {TL::L0A, TL::L0B, TL::BT};
-        else if (srcLoc == TL::L0C)
+        else if (srcLoc == TL::L0C || srcLoc == TL::UB)
             allowedDstLocs = {TL::L1, TL::UB};
-        else if (srcLoc == TL::UB)
-            allowedDstLocs = {TL::L1};
         if (!llvm::is_contained(allowedSrcLocs, srcLoc) || !llvm::is_contained(allowedDstLocs, dstLoc)) {
             StringRef srcLocStr = stringifyTensorLocation(srcLoc);
             auto diag =

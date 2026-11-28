@@ -229,6 +229,33 @@ func.func @resolve_relu_l0c(%arg0: tensor<32xf32, #asctile.local<L0C>>) -> tenso
   return %result : tensor<32xf32, #asctile.local<L0C>>
 }
 
+// CHECK-LABEL: func.func @resolve_concat_l0c(%arg0: tensor<32x128xf32, #asctile.local<L0C>>, %arg1: tensor<32x128xf32, #asctile.local<L0C>>) -> tensor<32x256xf32, #asctile.local<L0C>> {
+// CHECK-NEXT: %concat = tensor.concat dim(1) %arg0, %arg1 : (tensor<32x128xf32, #asctile.local<L0C>>, tensor<32x128xf32, #asctile.local<L0C>>) -> tensor<32x256xf32, #asctile.local<L0C>>
+// CHECK-NEXT: return %concat : tensor<32x256xf32, #asctile.local<L0C>>
+// CHECK-NEXT:}
+func.func @resolve_concat_l0c(%arg0: tensor<32x128xf32, #asctile.local<L0C>>, %arg1: tensor<32x128xf32, #asctile.local<L0C>>) -> tensor<32x256xf32, #asctile.local<L0C>> {
+  %auto_in = tensor.cast %arg0 : tensor<32x128xf32, #asctile.local<L0C>> to tensor<32x128xf32, #asctile.local<auto>>
+  %auto_in_0 = tensor.cast %arg1 : tensor<32x128xf32, #asctile.local<L0C>> to tensor<32x128xf32, #asctile.local<auto>>
+  %auto_out = tensor.concat dim(1) %auto_in, %auto_in_0 : (tensor<32x128xf32, #asctile.local<auto>>, tensor<32x128xf32, #asctile.local<auto>>) -> tensor<32x256xf32, #asctile.local<auto>>
+  %result = tensor.cast %auto_out : tensor<32x256xf32, #asctile.local<auto>> to tensor<32x256xf32, #asctile.local<L0C>>
+  return %result : tensor<32x256xf32, #asctile.local<L0C>>
+}
+
+// CHECK-LABEL: func.func @resolve_store_l0c(%arg0: tensor<32x256xf32, #asctile.global>, %arg1: tensor<32x128xf32, #asctile.local<L0C>>, %arg2: tensor<32x128xf32, #asctile.local<L0C>>) {
+// CHECK-NEXT: %c0_i32 = arith.constant 0 : i32
+// CHECK-NEXT: %concat = tensor.concat dim(1) %arg1, %arg2 : (tensor<32x128xf32, #asctile.local<L0C>>, tensor<32x128xf32, #asctile.local<L0C>>) -> tensor<32x256xf32, #asctile.local<L0C>>
+// CHECK-NEXT: asctile.store %concat, %arg0[%c0_i32, %c0_i32] : tensor<32x256xf32, #asctile.local<L0C>>, tensor<32x256xf32, #asctile.global>
+// CHECK-NEXT: return
+// CHECK-NEXT:}
+func.func @resolve_store_l0c(%arg0: tensor<32x256xf32, #asctile.global>, %arg1: tensor<32x128xf32, #asctile.local<L0C>>, %arg2: tensor<32x128xf32, #asctile.local<L0C>>) {
+  %c0_i32 = arith.constant 0 : i32
+  %auto_in = tensor.cast %arg1 : tensor<32x128xf32, #asctile.local<L0C>> to tensor<32x128xf32, #asctile.local<auto>>
+  %auto_in_0 = tensor.cast %arg2 : tensor<32x128xf32, #asctile.local<L0C>> to tensor<32x128xf32, #asctile.local<auto>>
+  %auto_out = tensor.concat dim(1) %auto_in, %auto_in_0 : (tensor<32x128xf32, #asctile.local<auto>>, tensor<32x128xf32, #asctile.local<auto>>) -> tensor<32x256xf32, #asctile.local<auto>>
+  asctile.store %auto_out, %arg0[%c0_i32, %c0_i32] : tensor<32x256xf32, #asctile.local<auto>>, tensor<32x256xf32, #asctile.global>
+  return
+}
+
 // CHECK-LABEL: func.func @resolve_transpose_concrete_operand(%arg0: tensor<16x32xf32, #asctile.local<UB>>) -> tensor<32x16xf32, #asctile.local<UB>> {
 // CHECK-NEXT: %0 = asctile.transpose %arg0, [1 : i32, 0 : i32] : tensor<16x32xf32, #asctile.local<UB>> to tensor<32x16xf32, #asctile.local<UB>>
 // CHECK-NEXT: return %0 : tensor<32x16xf32, #asctile.local<UB>>

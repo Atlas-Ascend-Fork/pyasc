@@ -157,15 +157,15 @@ def test_invalid_input_type(jit_test):
         kernel[1]()
 
 
-def test_reduce_all_dims_not_supported(jit_test, zero_tile):
+def test_reduce_all_dims(jit_test, mock_launch, zero_tile):
 
     @jit_test
     def kernel():
         x = zero_tile([32, 64], asctile.float32)
         asctile.reduce_sum(x, 0, 1)
 
-    with pytest.raises(RuntimeError, match="not supported"):
-        kernel[1]()
+    kernel[1]()
+    assert mock_launch.call_count == 1
 
 
 def test_reduce_all_unit_dims(jit_test, mock_launch, zero_tile):

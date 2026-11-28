@@ -15,4 +15,5 @@ Dialects and operations
    ascendc.md
    asctile.md
    ascvf.md
+   ascvf2.md
    emitasc.md

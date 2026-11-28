@@ -13,7 +13,10 @@
 #include "asctile/Conversion/LowerToAsc/Passes.h"
 #include "asctile/Dialect/AscTile/Transforms/Passes.h"
 #include "asctile/Dialect/AscVF/Transforms/Passes.h"
+#include "asctile/Dialect/AscVF2/Transforms/Passes.h"
 
+#include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
+#include "mlir/Dialect/Affine/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Pass/PassManager.h"
 
@@ -65,6 +68,23 @@ void defineAscendCPasses(py::module& mod)
             pm.addNestedPass<func::FuncOp>(createReuseUBAllocationPass(reuseInOut));
         },
         "pm"_a, "reuse_in_out"_a = false);
+}
+
+void defineAffinePasses(py::module& mod)
+{
+    using namespace pybind11::literals;
+    auto m = mod.def_submodule("affine");
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_affine_loop_coalescing", affine::createLoopCoalescingPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_affine_loop_fusion", affine::createLoopFusionPass);
+    m.def(
+        "add_affine_loop_normalize",
+        [](PassManager& pm, bool promoteSingleIter) {
+            pm.addNestedPass<func::FuncOp>(affine::createAffineLoopNormalizePass(promoteSingleIter));
+        },
+        "pm"_a, "promote_single_iter"_a = true);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_simplify_affine_structures", affine::createSimplifyAffineStructuresPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_affine_expand_index_ops", affine::createAffineExpandIndexOpsPass);
+    DEFINE_ADD_PASS("add_lower_affine", createLowerAffinePass);
 }
 
 void defineAscTilePasses(py::module& mod)
@@ -121,6 +141,30 @@ void defineAscVFPasses(py::module& mod)
     DEFINE_ADD_PASS_ON(func::FuncOp, "add_reorder_ops_in_vec_scope", createReorderOpsInVecScopePass);
 }
 
+void defineAscVF2Passes(py::module& mod)
+{
+    using namespace ascvf2;
+    auto m = mod.def_submodule("ascvf2");
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_assign_vf_group_tensors", createAssignVFGroupTensorsPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_bufferize_loop_result", createBufferizeLoopResultPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_drop_dead_write", createDropDeadWritePass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_expand_simple_mask_reg", createExpandSimpleMaskRegPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_fuse_vf_loops", createFuseVFLoopsPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_hoist_reg_tensor", createHoistRegTensorPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_insert_vf_sync", createInsertVFSyncPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_legalize_vf_group", createLegalizeVFGroupPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_lower_to_reg", createLowerToRegPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_merge_into_transfer", createMergeIntoTransferPass);
+    DEFINE_ADD_PASS("add_outline_vf_group", createOutlineVFGroupPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_promote_mem_to_reg", createPromoteMemToRegPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_raise_vf_for", createRaiseVFForPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_reorder_grouped_ops", createReorderGroupedOpsPass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_reuse_reg_tensor", createReuseRegTensorPass);
+    DEFINE_ADD_PASS("add_shrink_vf_signature", createShrinkVFSignaturePass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_vectorize", createVectorizePass);
+    DEFINE_ADD_PASS_ON(func::FuncOp, "add_wrap_vec_scope", createWrapVecScopePass);
+}
+
 void defineLowerToAscPasses(py::module& mod)
 {
     using namespace asclower;
@@ -145,9 +189,11 @@ void defineLowerToAscPasses(py::module& mod)
 
 void mlir::asctile::initPassesModule(py::module&& m)
 {
+    defineAffinePasses(m);
     defineAscendCPasses(m);
     defineAscTilePasses(m);
     defineAscVFPasses(m);
+    defineAscVF2Passes(m);
     defineLowerToAscPasses(m);
 }
 

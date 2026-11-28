@@ -59,8 +59,12 @@ def op_reduce_impl(input: LocalTensor, keep_dims: bool, dims: Tuple[int, ...], k
     check_dtype("input", input, support_dtypes)
     target_shape = get_reduction_shape(input.shape, keep_dims, dims)
     if not target_shape:
-        raise RuntimeError("Reduction along all dimensions is not supported")
+        handle = builder.create_asctile_ReduceAs1dOp(input.dtype.to_ir(), input.to_ir(), kind)
+        return PlainValue(handle)
     ir_type = ir.clone_shaped_type(input.to_ir().get_type(), target_shape)
+    if all(dim == 1 for dim in target_shape):
+        handle = builder.create_asctile_ReduceAs1dOp(ir_type, input.to_ir(), kind)
+        return cast_loc(LocalTensor(handle))
     dims_attr = global_builder.get_ir_builder().get_i32_array_attr(dims)
     handle = builder.create_asctile_ReduceOp(ir_type, input.to_ir(), dims_attr, kind)
     return cast_loc(LocalTensor(handle))

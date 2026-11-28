@@ -15,7 +15,7 @@ import torch
 from .helpers import parametrize_is_static
 
 
-@asctile.jit(reuse_alloc=1)
+@asctile.jit(reuse_alloc=2)
 def gather_simple(input_ptr, index_ptr, result_ptr, row_length: asctile.ConstExpr, ub_row: asctile.ConstExpr,
                   step: asctile.ConstExpr, repeats, data_size, index_size, unroll_factor: asctile.ConstExpr):
     input_tensor = asctile.global_tensor(input_ptr, [data_size, row_length])
@@ -32,21 +32,21 @@ def gather_simple(input_ptr, index_ptr, result_ptr, row_length: asctile.ConstExp
 # yapf: disable
 @parametrize_is_static()
 @pytest.mark.parametrize(
-    "test_name, block_num, input_shapes, input_dtypes, output_shapes, output_dtypes, compile_params, runtime_params, tiling_key, tiling_params",
+    "block_num, input_shapes, input_dtypes, output_shapes, output_dtypes, compile_params, runtime_params, tiling_key, tiling_params",
     [
 # PYASC_TESTS_BEGIN
-        pytest.param("test8", 72, ([30522, 768], [65536]), (torch.float32, torch.int32), ([65536, 768], ), (torch.float32, ), (0, ), (0, 0, 0.1), 1000000299, (72, 0, 2048, 8, [0, 0, 0, 0], 30522, 65536, 384, 910, 16, 15360), id="test8"),
-        pytest.param("test10", 72, ([32000, 5120], [4, 1024]), (torch.float16, torch.int64), ([4, 1024, 5120], ), (torch.float16, ), (0, ), (0, 0, 0.1), 1000000299, (72, 0, 1024, 8, [0, 0, 0, 0], 3200, 4096, 1280, 56, 64, 15360), id="test10"),
-        pytest.param("test12", 72, ([2, 768], [65536]), (torch.float32, torch.int32), ([65536, 768], ), (torch.float32, ), (0, ), (0, 0, 0.1), 1000000299, (72, 0, 2048, 8, [0, 0, 0, 0], 2, 65536, 384, 910, 16, 15360), id="test12"),
-        pytest.param("test13", 72, ([32000, 2048], [5064]), (torch.bfloat16, torch.int64), ([5064, 2048], ), (torch.bfloat16, ), (0, ), (0, 0, 0.1), 1000000299, (72, 0, 1024, 8, [0, 0, 0, 0], 32000, 5064, 512, 70, 24, 15360), id="test13"),
-        pytest.param("test14", 72, ([3953, 4096], [1, 2059]), (torch.float32, torch.int64), ([1, 2059, 4096], ), (torch.float32, ), (0, ), (0, 0, 0.1), 1000000299, (72, 0, 1024, 8, [0, 0, 0, 0], 3953, 2059, 2048, 28, 43, 15360), id="test14"),
-        pytest.param("test15", 72, ([2059, 4096], [1, 2059]), (torch.float32, torch.int64), ([1, 2059, 4096], ), (torch.float32, ), (0, ), (0, 0, 0.1), 1000000299, (72, 0, 1024, 8, [0, 0, 0, 0], 2059, 2059, 2048, 28, 43, 15360), id="test15"),
-        pytest.param("test16", 72, ([2, 1024], [65536]), (torch.float32, torch.int32), ([65536, 1024], ), (torch.float32, ), (0, ), (0, 0, 0.1), 1000000299, (72, 0, 2048, 8, [0, 0, 0, 0], 2, 65536, 512, 910, 16, 15360), id="test16"),
+        pytest.param(72, ([30522, 768], [65536]), (torch.float32, torch.int32), ([65536, 768], ), (torch.float32, ), (0, ), (0, 0, 0.1), 1000000299, (72, 0, 2048, 8, [0, 0, 0, 0], 30522, 65536, 384, 910, 16, 15360), id="test8"),
+        pytest.param(72, ([32000, 5120], [4, 1024]), (torch.float16, torch.int64), ([4, 1024, 5120], ), (torch.float16, ), (0, ), (0, 0, 0.1), 1000000299, (72, 0, 1024, 8, [0, 0, 0, 0], 3200, 4096, 1280, 56, 64, 15360), id="test10"),
+        pytest.param(72, ([2, 768], [65536]), (torch.float32, torch.int32), ([65536, 768], ), (torch.float32, ), (0, ), (0, 0, 0.1), 1000000299, (72, 0, 2048, 8, [0, 0, 0, 0], 2, 65536, 384, 910, 16, 15360), id="test12"),
+        pytest.param(72, ([32000, 2048], [5064]), (torch.bfloat16, torch.int64), ([5064, 2048], ), (torch.bfloat16, ), (0, ), (0, 0, 0.1), 1000000299, (72, 0, 1024, 8, [0, 0, 0, 0], 32000, 5064, 512, 70, 24, 15360), id="test13"),
+        pytest.param(72, ([3953, 4096], [1, 2059]), (torch.float32, torch.int64), ([1, 2059, 4096], ), (torch.float32, ), (0, ), (0, 0, 0.1), 1000000299, (72, 0, 1024, 8, [0, 0, 0, 0], 3953, 2059, 2048, 28, 43, 15360), id="test14"),
+        pytest.param(72, ([2059, 4096], [1, 2059]), (torch.float32, torch.int64), ([1, 2059, 4096], ), (torch.float32, ), (0, ), (0, 0, 0.1), 1000000299, (72, 0, 1024, 8, [0, 0, 0, 0], 2059, 2059, 2048, 28, 43, 15360), id="test15"),
+        pytest.param(72, ([2, 1024], [65536]), (torch.float32, torch.int32), ([65536, 1024], ), (torch.float32, ), (0, ), (0, 0, 0.1), 1000000299, (72, 0, 2048, 8, [0, 0, 0, 0], 2, 65536, 512, 910, 16, 15360), id="test16"),
 # PYASC_TESTS_END
     ])
 # yapf: enable
-def test_gather(profiler, runs, is_static, test_name, block_num, input_shapes, input_dtypes, output_shapes,
-                output_dtypes, compile_params, runtime_params, tiling_key, tiling_params):
+def test_gather(profiler, runs, is_static, block_num, input_shapes, input_dtypes, output_shapes, output_dtypes,
+                compile_params, runtime_params, tiling_key, tiling_params):
 
     input_shape = input_shapes[0]
     index_shape = input_shapes[1]

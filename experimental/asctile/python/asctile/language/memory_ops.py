@@ -61,7 +61,7 @@ def copy(src: LocalTensor, offsets: Optional[Iterable[RuntimeInt]] = None, shape
             Must contain static values (e.g., ``ConstExpr`` or compile-time constants).
         location: The memory location for the destination tensor. Default is ``src.location``.
             Supported location transfers: ``L1`` to ``L0A``, ``L1`` to ``L0B``, ``L1`` to ``BT``, ``L0C`` to ``L1``,
-            ``L0C`` to ``UB``, ``UB`` to ``L1``.
+            ``L0C`` to ``UB``, ``UB`` to ``L1``, ``UB`` to ``UB``.
         distrib: The strategy for distributing the source tensor data across the vector sub-blocks. If None,
             no distrib is applied. Each mode is only valid for specific memory transfers:
 
@@ -101,6 +101,12 @@ def copy(src: LocalTensor, offsets: Optional[Iterable[RuntimeInt]] = None, shape
 
             src = asctile.copy_in(x_gm, [0, 0], [64, 64])
             result = asctile.copy(src, [16, 16], [32, 32])
+
+        Split a UB tile into column halves with two UB to UB copies: ::
+
+            x = asctile.copy_in(x_gm, [row, 0], [heads, 128])
+            x0 = asctile.copy(x, [0, 0], [heads, 64])  # columns [0:64)
+            x1 = asctile.copy(x, [0, 64], [heads, 64])  # columns [64:128)
 
         Copy a tensor to a different memory location (e.g., L0A for matrix multiplication): ::
 

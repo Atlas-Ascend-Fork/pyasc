@@ -73,6 +73,7 @@ def setup_generated_mlir_docs():
         ("Dialects/AscendC.md", "ascendc.md"),
         ("Dialects/AscTile.md", "asctile.md"),
         ("Dialects/AscVF.md", "ascvf.md"),
+        ("Dialects/AscVF2.md", "ascvf2.md"),
         ("Dialects/EmitAsc.md", "emitasc.md"),
     ]
     mlir_docs_dir = Path("mlir")
@@ -84,6 +85,7 @@ def setup_generated_mlir_docs():
         ("AscTileAscendCPasses.md", "ascendcext.md", "AscendC (from AscTile extension)"),
         ("AscTilePasses.md", "asctile.md", "AscTile"),
         ("AscVFPasses.md", "ascvf.md", "AscVF"),
+        ("AscVF2Passes.md", "ascvf2.md", "AscVF2"),
         ("LowerToAsc.md", "lowertoasc.md", "LowerToAsc"),
     ]
     for src_md, dst_md, title in passes_docs:

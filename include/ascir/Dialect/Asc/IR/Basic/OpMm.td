@@ -145,7 +145,7 @@ def AscendC_LoadDataWithTransposeV2Op
 }
 
 def AscendC_MmadOp
-    : APIOp<"mmad", "Mmad", [AscFunc, OpWithDstInterface, OpWithSrcInterface, OpWithReusableSrcInterface]> {
+    : APIOp<"mmad", "Mmad", [AscFunc, OpWithDstInterface, OpWithSrcInterface]> {
   let description = "Matrix multiply-accumulate between LocalTensors (dst += fm * filter)";
   let arguments = (ins AscendC_BaseTensorTypeInterface:$dst,
                        AscendC_BaseTensorTypeInterface:$fm,
@@ -157,7 +157,7 @@ def AscendC_MmadOp
 }
 
 def AscendC_MmadWithBiasOp
-    : APIOp<"mmad_with_bias", "Mmad", [AscFunc, OpWithDstInterface, OpWithSrcInterface, OpWithReusableSrcInterface]> {
+    : APIOp<"mmad_with_bias", "Mmad", [AscFunc, OpWithDstInterface, OpWithSrcInterface]> {
   let description = "Matrix multiply-accumulate with bias (dst += fm * filter + bias)";
   let arguments = (ins AscendC_BaseTensorTypeInterface:$dst,
                        AscendC_BaseTensorTypeInterface:$fm,

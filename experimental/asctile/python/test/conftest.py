@@ -13,6 +13,7 @@ import os
 import types
 from unittest.mock import patch
 
+from asc.experimental.asctile.interpreter import interpreter_enabled
 from asc.lib.profiling import Profiler, task_time_median
 from asc.runtime import config
 import pytest
@@ -48,6 +49,7 @@ def pytest_configure(config):
         "markers",
         "asctile_xfail(reason, compile_ok, when): expected failure; the apply_xfail fixture attaches xfail at run time",
     )
+    config.addinivalue_line("markers", "no_interpret: the test is not supported by the interpreter mode")
 
 
 def pytest_make_parametrize_id(val):
@@ -62,6 +64,12 @@ def pytest_terminal_summary(terminalreporter, config):
     terminalreporter.write_sep("=", "Profiling results")
     for entry in config.profiling_results:
         terminalreporter.write_line(f"{entry['test']}: {entry['duration']} μs")
+
+
+@pytest.fixture(autouse=True)
+def skip_no_interpret(request: pytest.FixtureRequest):
+    if request.node.get_closest_marker("no_interpret") and interpreter_enabled():
+        pytest.skip("the test is not supported by the interpreter mode")
 
 
 @pytest.fixture(autouse=True)

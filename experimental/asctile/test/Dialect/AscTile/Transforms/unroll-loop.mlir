@@ -195,3 +195,29 @@ func.func @unroll_nested_loop(%arg0: tensor<32xi32, #asctile.global>) {
   } {asctile.unroll_factor = 2}
   return
 }
+
+// CHECK-LABEL: func.func @unroll_loop_yield_global(%arg0: i32) -> (i32, i32) {
+// CHECK:       %0:2 = scf.execute_region -> (i32, i32) {
+// CHECK-NEXT:      %c2_i32 = arith.constant 2 : i32
+// CHECK-NEXT:      %1:2 = scf.for %arg1 = %c0_i32 to %c32_i32 step %c2_i32 iter_args(%arg2 = %c0_i32, %arg3 = %c1_i32) -> (i32, i32) : i32 {
+// ANNOT-NEXT:        %2 = arith.addi %c1_i32, %arg2 {asctile.unroll_iter = 0 : i64} : i32
+// NOANN-NEXT:        %2 = arith.addi %c1_i32, %arg2 : i32
+// ANNOT-NEXT:        %3 = arith.addi %c1_i32, %2 {asctile.unroll_iter = 1 : i64} : i32
+// NOANN-NEXT:        %3 = arith.addi %c1_i32, %2 : i32
+// CHECK-NEXT:        scf.yield %3, %arg0 : i32, i32
+// CHECK-NEXT:      }
+// CHECK-NEXT:      scf.yield %1#0, %1#1 : i32, i32
+// ANNOT-NEXT:    } {asctile.unroll_factor = 2 : i64, asctile.unrolled_loop = 0 : i64}
+// NOANN-NEXT:    }
+// CHECK-NEXT:    return %0#0, %0#1 : i32, i32
+// CHECK-NEXT:  }
+func.func @unroll_loop_yield_global(%arg0: i32) -> (i32, i32) {
+  %c0_i32 = arith.constant 0 : i32
+  %c1_i32 = arith.constant 1 : i32
+  %c32_i32 = arith.constant 32 : i32
+  %0:2 = scf.for %arg1 = %c0_i32 to %c32_i32 step %c1_i32 iter_args(%arg2 = %c0_i32, %arg3 = %c1_i32) -> (i32, i32) : i32{
+    %1 = arith.addi %c1_i32, %arg2: i32
+    scf.yield %1, %arg0 : i32, i32
+  } {asctile.unroll_factor = 2}
+  return %0#0, %0#1 : i32, i32
+}

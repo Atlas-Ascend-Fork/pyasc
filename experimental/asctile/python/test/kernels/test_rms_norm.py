@@ -11,7 +11,7 @@ import pytest
 import torch
 
 
-@asctile.jit(always_compile=True, reuse_alloc=1)
+@asctile.jit(always_compile=True, reuse_alloc=2)
 def rms_norm_kernel(input_ptr: asctile.GlobalAddress, gamma_ptr: asctile.GlobalAddress, out_ptr: asctile.GlobalAddress,
                     eps: asctile.ConstExpr, size: int, tile_size: asctile.ConstExpr, total_blocks: int,
                     num_blocks: asctile.ConstExpr, norm_shape: asctile.ConstExpr):

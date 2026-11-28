@@ -120,6 +120,8 @@ def LowerAscTileDataTransfer : Pass<"asclower-asctile-data-transfer", "func::Fun
     - **CopyOp (L1 to L0A/L0B)**: Creates `LoadDataG2LOp` or `LoadDataWithTransposeOp` with fractal layout
       - Supports `transposeAL0` attribute for transposed matrix A copies
       - Supports `transposeBL0` attribute for transposed matrix B copies
+    - **CopyOp (UB to UB)**: Creates `DataCopyL2Op` (high-dimensional split `AscendC::DataCopy`) with computed
+      `DataCopyParams`
     - **GetValueOp/SetValueOp**: Creates global tensor scalar get/set operations
 
     Handles both static and dynamic tensor shapes, computing linear offsets from multi-dimensional indices.

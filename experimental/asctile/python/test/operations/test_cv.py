@@ -109,6 +109,7 @@ def ub_to_gm_sync_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.GlobalAddr
     asctile.copy_out(result, c_gm, [0, 0])
 
 
+@pytest.mark.no_interpret
 @pytest.mark.parametrize("M, K, N", [(32, 32, 32)])
 def test_ub_to_gm_sync(M, K, N):
     a = torch.rand(M, K, dtype=torch.float16)
@@ -138,6 +139,7 @@ def cube_to_gm_sync_kernel(a_ptr: asctile.GlobalAddress, b_ptr: asctile.GlobalAd
     asctile.copy_out(a_doubled, c_gm, [0, 0])
 
 
+@pytest.mark.no_interpret
 @pytest.mark.parametrize("M, K, N", [(32, 32, 32)])
 def test_cube_to_gm_sync(M, K, N):
     a = torch.rand(M, K, dtype=torch.float16)

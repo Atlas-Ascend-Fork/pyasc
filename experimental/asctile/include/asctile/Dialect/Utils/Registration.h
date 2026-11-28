@@ -16,6 +16,9 @@
 #include "asctile/Dialect/AscTile/Transforms/Passes.h"
 #include "asctile/Dialect/AscVF/IR/AscVF.h"
 #include "asctile/Dialect/AscVF/Transforms/Passes.h"
+#include "asctile/Dialect/AscVF2/IR/AscVF2.h"
+#include "asctile/Dialect/AscVF2/Transforms/Passes.h"
+#include "asctile/Dialect/AscendC/IR/Interfaces.h"
 #include "asctile/Dialect/AscendC/Transforms/Passes.h"
 
 #include "ascir/Dialect/Utils/Registration.h"
@@ -28,9 +31,11 @@ namespace asctile {
 inline void registerDialects(DialectRegistry& registry)
 {
     ascir::registerDialects(registry);
-    registry.insert<asctile::AscTileDialect, ascvf::AscVFDialect>();
+    ascendc::registerReusableSrcModels(registry);
+    registry.insert<asctile::AscTileDialect, ascvf::AscVFDialect, ascvf2::AscVF2Dialect>();
     asctile::registerExternalModels(registry);
     ascvf::registerExternalModels(registry);
+    ascvf2::registerExternalModels(registry);
 }
 
 inline void registerExtensions(DialectRegistry& registry) { ascir::registerExtensions(registry); }
@@ -40,6 +45,7 @@ inline void registerPasses()
     ascir::registerPasses();
     registerAscTilePasses();
     registerAscVFPasses();
+    registerAscVF2Passes();
     registerAscTileAscendCPasses();
     registerLowerToAscPasses();
 }

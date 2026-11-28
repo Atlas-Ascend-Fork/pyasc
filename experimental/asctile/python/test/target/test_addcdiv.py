@@ -13,7 +13,7 @@ import torch
 from .helpers import parametrize_is_static, select_elementwise_tile
 
 
-@asctile.jit(reuse_alloc=1)
+@asctile.jit(reuse_alloc=2)
 def addcdiv(input_ptr: asctile.GlobalAddress, x1_ptr: asctile.GlobalAddress, x2_ptr: asctile.GlobalAddress,
             output_ptr: asctile.GlobalAddress, input_length, tile_length: asctile.ConstExpr,
             unroll_factor: asctile.ConstExpr):

@@ -15,7 +15,7 @@ import torch
 from .helpers import parametrize_is_static
 
 
-@asctile.jit(reuse_alloc=1, vf_fusion=True)
+@asctile.jit(reuse_alloc=2, vf_fusion=True)
 def kl_div(input_x_ptr: asctile.GlobalAddress, input_target_ptr: asctile.GlobalAddress,
            output_ptr: asctile.GlobalAddress, input_size, tile_length: asctile.ConstExpr,
            unroll_factor: asctile.ConstExpr):

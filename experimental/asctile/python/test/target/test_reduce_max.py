@@ -15,7 +15,7 @@ import torch
 from .helpers import CORE_NUM, parametrize_is_static, select_reduce_tile
 
 
-@asctile.jit(reuse_alloc=1)
+@asctile.jit(reuse_alloc=2)
 def reduce_max_d_last_axis(input_ptr: asctile.GlobalAddress, output_ptr: asctile.GlobalAddress, input_num_rows,
                            input_num_cols, output_length, tile_shape: asctile.ConstExpr,
                            unroll_factor: asctile.ConstExpr, contiguous: asctile.ConstExpr):
@@ -45,7 +45,7 @@ def reduce_max_d_last_axis(input_ptr: asctile.GlobalAddress, output_ptr: asctile
             asctile.copy_out(cache, out_gm, [i * tile_rows])
 
 
-@asctile.jit(reuse_alloc=1)
+@asctile.jit(reuse_alloc=2)
 def reduce_max_d_middle_axis(input_ptr: asctile.GlobalAddress, output_ptr: asctile.GlobalAddress, outer,
                              mid: asctile.ConstExpr, inner: asctile.ConstExpr, tile_cols: asctile.ConstExpr,
                              unroll_factor: asctile.ConstExpr):
